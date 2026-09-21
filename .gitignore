@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+
+# Android/iOS (generated)
+apps/mobile/android/
+apps/mobile/ios/
+
+# Environment files
+.env
+.env.local
+.env.production
+*.env
+
+# Expo
+apps/mobile/.expo/
+apps/mobile/expo-env.d.ts
+
+# Keystore (IMPORTANT - never commit)
+*.keystore
+*.jks
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Turbo
+.turbo/
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,790 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ═══════════════════════════════
+// ENUMS
+// ═══════════════════════════════
+
+enum Role {
+  CUSTOMER
+  PROVIDER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum LoyaltyTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum PriceType {
+  FIXED
+  STARTING_AT
+  PER_SQFT
+  CUSTOM_QUOTE
+}
+
+enum ProviderStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PROVIDER_ASSIGNED
+  PROVIDER_TRAVELLING
+  SERVICE_STARTED
+  SERVICE_COMPLETED
+  CANCELLED
+  REFUND_INITIATED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum WalletTxnType {
+  CREDIT
+  DEBIT
+  REFUND
+  REFERRAL_BONUS
+  CASHBACK
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum EarningStatus {
+  PENDING
+  SETTLED
+  PAYOUT_INITIATED
+  PAID
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_ASSIGNED
+  PROVIDER_TRAVELLING
+  SERVICE_STARTED
+  SERVICE_COMPLETED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  REVIEW_REQUEST
+  OFFER
+  GENERAL
+}
+
+enum PropertyType {
+  SINGLE_ROOM
+  ONE_RK
+  ONE_BHK
+  TWO_BHK
+  THREE_BHK
+  INDEPENDENT_HOUSE
+  BUNGALOW
+  SHOP
+  OFFICE
+  SHOWROOM
+  GODOWN
+  PLOT
+  AGRICULTURAL_LAND
+}
+
+enum ListingType {
+  RENT
+  SALE
+}
+
+enum FurnishedType {
+  FURNISHED
+  SEMI_FURNISHED
+  UNFURNISHED
+}
+
+enum PropertyStatus {
+  ACTIVE
+  RENTED
+  SOLD
+  EXPIRED
+  INACTIVE
+}
+
+enum ConnectionType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  NOT_INTERESTED
+  REGISTERED
+  FOLLOW_UP
+}
+
+// ═══════════════════════════════
+// AUTH MODELS
+// ═══════════════════════════════
+
+model User {
+  id            String      @id @default(cuid())
+  phone         String      @unique
+  name          String?
+  email         String?
+  avatar        String?
+  role          Role        @default(CUSTOMER)
+  isActive      Boolean     @default(true)
+  isVerified    Boolean     @default(false)
+  fcmToken      String?
+  referralCode  String      @unique @default(cuid())
+  referredBy    String?
+  walletBalance Float       @default(0)
+  loyaltyPoints Int         @default(0)
+  loyaltyTier   LoyaltyTier @default(BRONZE)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  bookings      Booking[]
+  reviews       Review[]
+  addresses     Address[]
+  walletTxns    WalletTransaction[]
+  notifications Notification[]
+  provider      Provider?
+  properties    Property[]
+  subscriptions UserSubscription[]
+}
+
+model OTPVerification {
+  id        String   @id @default(cuid())
+  phone     String
+  otp       String
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════
+// ADDRESS MODEL
+// ═══════════════════════════════
+
+model Address {
+  id          String    @id @default(cuid())
+  userId      String
+  label       String
+  fullAddress String
+  area        String
+  landmark    String?
+  pincode     String
+  latitude    Float?
+  longitude   Float?
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════
+// SERVICE MODELS
+// ═══════════════════════════════
+
+model Category {
+  id            String        @id @default(cuid())
+  name          String
+  slug          String        @unique
+  image         String?
+  icon          String?
+  description   String?
+  sortOrder     Int           @default(0)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+
+  subCategories SubCategory[]
+}
+
+model SubCategory {
+  id          String    @id @default(cuid())
+  categoryId  String
+  name        String
+  slug        String    @unique
+  image       String?
+  description String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  services Service[]
+
+  @@index([categoryId])
+}
+
+model Service {
+  id            String    @id @default(cuid())
+  subCategoryId String
+  name          String
+  slug          String    @unique
+  description   String
+  image         String?
+  basePrice     Float
+  priceType     PriceType @default(FIXED)
+  duration      String
+  professionals Int       @default(1)
+  guarantee     String?
+  isActive      Boolean   @default(true)
+  isTrending    Boolean   @default(false)
+  isFeatured    Boolean   @default(false)
+  sortOrder     Int       @default(0)
+  avgRating     Float     @default(0)
+  totalReviews  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  subCategory  SubCategory        @relation(fields: [subCategoryId], references: [id])
+  inclusions   ServiceInclusion[]
+  exclusions   ServiceExclusion[]
+  pricingTiers ServicePricing[]
+  addOns       ServiceAddOn[]
+  bookings     Booking[]
+  reviews      Review[]
+  faqs         ServiceFAQ[]
+
+  @@index([subCategoryId])
+  @@index([isTrending])
+  @@index([isFeatured])
+}
+
+model ServiceInclusion {
+  id        String  @id @default(cuid())
+  serviceId String
+  text      String
+  sortOrder Int     @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+model ServiceExclusion {
+  id        String  @id @default(cuid())
+  serviceId String
+  text      String
+  sortOrder Int     @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+model ServicePricing {
+  id        String  @id @default(cuid())
+  serviceId String
+  label     String
+  price     Float
+  duration  String?
+  sortOrder Int     @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+model ServiceAddOn {
+  id          String  @id @default(cuid())
+  serviceId   String
+  name        String
+  price       Float
+  description String?
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+model ServiceFAQ {
+  id        String  @id @default(cuid())
+  serviceId String
+  question  String
+  answer    String
+  sortOrder Int     @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+// ═══════════════════════════════
+// PROVIDER MODELS
+// ═══════════════════════════════
+
+model Provider {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  bio             String?
+  experience      Int            @default(0)
+  aadharNumber    String?
+  panNumber       String?
+  aadharImage     String?
+  panImage        String?
+  policeVerified  Boolean        @default(false)
+  portfolioImages String[]
+  bankAccount     String?
+  bankIFSC        String?
+  bankName        String?
+  upiId           String?
+  commissionRate  Float          @default(20)
+  status          ProviderStatus @default(PENDING)
+  avgRating       Float          @default(0)
+  totalJobs       Int            @default(0)
+  totalEarnings   Float          @default(0)
+  isAvailable     Boolean        @default(false)
+  serviceAreas    String[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user         User                   @relation(fields: [userId], references: [id])
+  services     ProviderService[]
+  bookings     Booking[]
+  availability ProviderAvailability[]
+  payouts      Payout[]
+  earnings     ProviderEarning[]
+}
+
+model ProviderService {
+  id          String  @id @default(cuid())
+  providerId  String
+  serviceId   String
+  customPrice Float?
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+}
+
+model ProviderAvailability {
+  id          String   @id @default(cuid())
+  providerId  String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  isAvailable Boolean  @default(true)
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+}
+
+// ═══════════════════════════════
+// BOOKING MODELS
+// ═══════════════════════════════
+
+model Booking {
+  id                  String        @id @default(cuid())
+  bookingNumber       String        @unique
+  userId              String
+  providerId          String?
+  serviceId           String
+  addressId           String
+  pricingLabel        String?
+  addOns              Json?
+  scheduledDate       DateTime
+  scheduledTime       String
+  status              BookingStatus @default(PENDING)
+  baseAmount          Float
+  addOnAmount         Float         @default(0)
+  discountAmount      Float         @default(0)
+  couponCode          String?
+  totalAmount         Float
+  paymentStatus       PaymentStatus @default(PENDING)
+  paymentMethod       String?
+  razorpayOrderId     String?
+  razorpayPaymentId   String?
+  startOTP            String?
+  endOTP              String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancelReason        String?
+  specialInstructions String?
+  beforePhotos        String[]
+  afterPhotos         String[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  user          User                   @relation(fields: [userId], references: [id])
+  provider      Provider?              @relation(fields: [providerId], references: [id])
+  service       Service                @relation(fields: [serviceId], references: [id])
+  address       Address                @relation(fields: [addressId], references: [id])
+  review        Review?
+  payment       Payment?
+  statusHistory BookingStatusHistory[]
+
+  @@index([userId])
+  @@index([providerId])
+  @@index([status])
+}
+
+model BookingStatusHistory {
+  id        String        @id @default(cuid())
+  bookingId String
+  status    BookingStatus
+  note      String?
+  changedBy String?
+  createdAt DateTime      @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+}
+
+// ═══════════════════════════════
+// PAYMENT MODEL
+// ═══════════════════════════════
+
+model Payment {
+  id                String        @id @default(cuid())
+  bookingId         String        @unique
+  amount            Float
+  currency          String        @default("INR")
+  method            String?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  status            PaymentStatus @default(PENDING)
+  paidAt            DateTime?
+  refundId          String?
+  refundAmount      Float?
+  refundedAt        DateTime?
+  createdAt         DateTime      @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+// ═══════════════════════════════
+// WALLET MODEL
+// ═══════════════════════════════
+
+model WalletTransaction {
+  id          String        @id @default(cuid())
+  userId      String
+  type        WalletTxnType
+  amount      Float
+  balance     Float
+  description String
+  referenceId String?
+  createdAt   DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════
+// REVIEW MODEL
+// ═══════════════════════════════
+
+model Review {
+  id                String   @id @default(cuid())
+  bookingId         String   @unique
+  userId            String
+  serviceId         String
+  providerId        String?
+  overallRating     Float
+  punctualityRating Float?
+  qualityRating     Float?
+  behaviourRating   Float?
+  valueRating       Float?
+  comment           String?
+  photos            String[]
+  isVerified        Boolean  @default(true)
+  providerReply     String?
+  helpfulCount      Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@index([serviceId])
+  @@index([userId])
+}
+
+// ═══════════════════════════════
+// COUPON MODEL
+// ═══════════════════════════════
+
+model Coupon {
+  id                   String       @id @default(cuid())
+  code                 String       @unique
+  description          String
+  discountType         DiscountType
+  discountValue        Float
+  minOrderAmount       Float        @default(0)
+  maxDiscount          Float?
+  usageLimit           Int?
+  usedCount            Int          @default(0)
+  perUserLimit         Int          @default(1)
+  validFrom            DateTime
+  validTill            DateTime
+  isActive             Boolean      @default(true)
+  applicableCategories String[]
+  createdAt            DateTime     @default(now())
+}
+
+// ═══════════════════════════════
+// PROVIDER EARNINGS
+// ═══════════════════════════════
+
+model ProviderEarning {
+  id         String        @id @default(cuid())
+  providerId String
+  bookingId  String
+  gross      Float
+  commission Float
+  net        Float
+  status     EarningStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+}
+
+model Payout {
+  id          String       @id @default(cuid())
+  providerId  String
+  amount      Float
+  method      String
+  status      PayoutStatus @default(PENDING)
+  reference   String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+}
+
+// ═══════════════════════════════
+// NOTIFICATION MODEL
+// ═══════════════════════════════
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  title       String
+  body        String
+  type        NotificationType
+  referenceId String?
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════
+// PROPERTY MODELS
+// ═══════════════════════════════
+
+model Property {
+  id                String         @id @default(cuid())
+  userId            String
+  title             String
+  description       String
+  type              PropertyType
+  listingType       ListingType
+  price             Float
+  priceNegotiable   Boolean        @default(true)
+  area              Float?
+  bedrooms          Int?
+  bathrooms         Int?
+  floor             Int?
+  totalFloors       Int?
+  furnished         FurnishedType  @default(UNFURNISHED)
+  locality          String
+  fullAddress       String
+  landmark          String?
+  latitude          Float?
+  longitude         Float?
+  images            String[]
+  amenities         String[]
+  isBachelorAllowed Boolean        @default(true)
+  isPetAllowed      Boolean        @default(false)
+  isVerified        Boolean        @default(false)
+  isFeatured        Boolean        @default(false)
+  status            PropertyStatus @default(ACTIVE)
+  listingPlan       String         @default("BASIC")
+  expiresAt         DateTime?
+  viewCount         Int            @default(0)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([listingType])
+}
+
+// ═══════════════════════════════
+// CSPDCL MODELS
+// ═══════════════════════════════
+
+model CSPDCLConsumer {
+  id               String         @id @default(cuid())
+  consumerNumber   String         @unique
+  name             String
+  address          String
+  area             String
+  locality         String?
+  ward             String?
+  connectionType   ConnectionType @default(RESIDENTIAL)
+  contactNumber    String?
+  loadSanctioned   Float?
+  lastBillAmount   Float?
+  paymentStatus    String?
+  isRegistered     Boolean        @default(false)
+  registeredUserId String?
+  leadStatus       LeadStatus     @default(NEW)
+  campaignId       String?
+  lastContactedAt  DateTime?
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  campaign CSPDCLCampaign? @relation(fields: [campaignId], references: [id])
+  callLogs CSPDCLCallLog[]
+
+  @@index([leadStatus])
+  @@index([campaignId])
+}
+
+model CSPDCLCampaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("ACTIVE")
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  consumers CSPDCLConsumer[]
+  callLogs  CSPDCLCallLog[]
+}
+
+model CSPDCLCallLog {
+  id         String      @id @default(cuid())
+  consumerId String
+  campaignId String?
+  calledBy   String
+  status     String
+  outcome    LeadStatus?
+  notes      String?
+  duration   Int?
+  calledAt   DateTime    @default(now())
+
+  consumer CSPDCLConsumer  @relation(fields: [consumerId], references: [id])
+  campaign CSPDCLCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([consumerId])
+}
+
+// ═══════════════════════════════
+// SUBSCRIPTION MODELS
+// ═══════════════════════════════
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  name          String
+  price         Float
+  duration      Int
+  discount      Float
+  features      String[]
+  isActive      Boolean  @default(true)
+
+  subscriptions UserSubscription[]
+}
+
+model UserSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  planId    String
+  startDate DateTime @default(now())
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  paymentId String?
+
+  user User             @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════
+// CMS MODELS
+// ═══════════════════════════════
+
+model Banner {
+  id        String    @id @default(cuid())
+  title     String
+  image     String
+  link      String?
+  position  String
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model AppSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
