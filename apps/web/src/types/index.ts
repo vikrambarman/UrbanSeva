@@ -1,99 +1,239 @@
-// User Types
-export type UserRole = 'customer' | 'provider' | 'admin'
+// ═══════════════════════════════
+// BASE TYPES
+// ═══════════════════════════════
+
+export type UserRole = 'CUSTOMER' | 'PROVIDER' | 'ADMIN' | 'SUPER_ADMIN'
+export type LoyaltyTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM'
+export type BookingStatus =
+  | 'PENDING' | 'CONFIRMED' | 'PROVIDER_ASSIGNED'
+  | 'PROVIDER_TRAVELLING' | 'SERVICE_STARTED'
+  | 'SERVICE_COMPLETED' | 'CANCELLED'
+  | 'REFUND_INITIATED' | 'REFUNDED'
+export type PaymentStatus =
+  | 'PENDING' | 'PAID' | 'FAILED'
+  | 'REFUNDED' | 'PARTIALLY_REFUNDED'
+export type PriceType =
+  | 'FIXED' | 'STARTING_AT' | 'PER_SQFT' | 'CUSTOM_QUOTE'
+
+// ═══════════════════════════════
+// USER TYPES
+// ═══════════════════════════════
 
 export interface User {
   id: string
   phone: string
   name: string | null
   email: string | null
+  avatar: string | null
   role: UserRole
-  isVerified: boolean
   isActive: boolean
+  isVerified: boolean
+  walletBalance: number
+  loyaltyPoints: number
+  loyaltyTier: LoyaltyTier
+  referralCode: string
   createdAt: Date
   updatedAt: Date
 }
 
-// Booking Types
-export type BookingStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'assigned'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
-  | 'rescheduled'
-
-export type PaymentStatus =
-  | 'pending'
-  | 'paid'
-  | 'failed'
-  | 'refunded'
-
-export type PaymentMethod =
-  | 'upi'
-  | 'card'
-  | 'netbanking'
-  | 'wallet'
-  | 'cash'
+// ═══════════════════════════════
+// ADDRESS TYPES
+// ═══════════════════════════════
 
 export interface Address {
   id: string
   userId: string
   label: string
   fullAddress: string
+  area: string
   landmark: string | null
-  city: string
   pincode: string
   latitude: number | null
   longitude: number | null
   isDefault: boolean
 }
 
-export interface ServiceCategory {
+// ═══════════════════════════════
+// CATEGORY TYPES
+// ═══════════════════════════════
+
+export interface Category {
   id: string
   name: string
   slug: string
-  icon: string
+  image: string | null
+  icon: string | null
   description: string | null
+  sortOrder: number
   isActive: boolean
+  createdAt: Date
+}
+
+export interface SubCategory {
+  id: string
+  categoryId: string
+  name: string
+  slug: string
+  image: string | null
+  description: string | null
+  sortOrder: number
+  isActive: boolean
+}
+
+export interface CategoryWithSubs extends Category {
+  subCategories: SubCategory[]
+}
+
+// ═══════════════════════════════
+// SERVICE TYPES
+// ═══════════════════════════════
+
+export interface ServiceInclusion {
+  id: string
+  serviceId: string
+  text: string
+  sortOrder: number
+}
+
+export interface ServiceExclusion {
+  id: string
+  serviceId: string
+  text: string
+  sortOrder: number
+}
+
+export interface ServicePricing {
+  id: string
+  serviceId: string
+  label: string
+  price: number
+  duration: string | null
+  sortOrder: number
+}
+
+export interface ServiceAddOn {
+  id: string
+  serviceId: string
+  name: string
+  price: number
+  description: string | null
+}
+
+export interface ServiceFAQ {
+  id: string
+  serviceId: string
+  question: string
+  answer: string
   sortOrder: number
 }
 
 export interface Service {
   id: string
-  categoryId: string
+  subCategoryId: string
   name: string
   slug: string
   description: string
+  image: string | null
   basePrice: number
-  duration: number
-  unit: string
-  imageUrl: string | null
+  priceType: PriceType
+  duration: string
+  professionals: number
+  guarantee: string | null
   isActive: boolean
-  rating: number
-  totalBookings: number
-}
-
-export interface Booking {
-  id: string
-  bookingNumber: string
-  customerId: string
-  providerId: string | null
-  serviceId: string
-  status: BookingStatus
-  paymentStatus: PaymentStatus
-  scheduledAt: Date
-  completedAt: Date | null
-  address: Address
-  notes: string | null
-  amount: number
-  platformFee: number
-  providerEarning: number
+  isTrending: boolean
+  isFeatured: boolean
+  avgRating: number
+  totalReviews: number
   createdAt: Date
   updatedAt: Date
 }
 
-// API Types
+export interface ServiceWithDetails extends Service {
+  subCategory: SubCategory & {
+    category: Category
+  }
+  inclusions: ServiceInclusion[]
+  exclusions: ServiceExclusion[]
+  pricingTiers: ServicePricing[]
+  addOns: ServiceAddOn[]
+  faqs: ServiceFAQ[]
+}
+
+// ═══════════════════════════════
+// BOOKING TYPES
+// ═══════════════════════════════
+
+export interface Booking {
+  id: string
+  bookingNumber: string
+  userId: string
+  providerId: string | null
+  serviceId: string
+  addressId: string
+  pricingLabel: string | null
+  scheduledDate: Date
+  scheduledTime: string
+  status: BookingStatus
+  baseAmount: number
+  addOnAmount: number
+  discountAmount: number
+  couponCode: string | null
+  totalAmount: number
+  paymentStatus: PaymentStatus
+  specialInstructions: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface BookingWithAll extends Booking {
+  user: User
+  service: Service
+  address: Address
+}
+
+// ═══════════════════════════════
+// REVIEW TYPES
+// ═══════════════════════════════
+
+export interface Review {
+  id: string
+  bookingId: string
+  userId: string
+  serviceId: string
+  overallRating: number
+  comment: string | null
+  createdAt: Date
+}
+
+// ═══════════════════════════════
+// ADDON ITEM (Booking Store)
+// ═══════════════════════════════
+
+export interface AddOnItem {
+  id: string
+  name: string
+  price: number
+  description?: string | null
+}
+
+// ═══════════════════════════════
+// SEARCH + FILTERS
+// ═══════════════════════════════
+
+export interface SearchFilters {
+  query?: string
+  category?: string
+  subcategory?: string
+  minPrice?: number
+  maxPrice?: number
+  rating?: number
+  sortBy?: 'price' | 'rating' | 'popularity'
+}
+
+// ═══════════════════════════════
+// API RESPONSE
+// ═══════════════════════════════
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T
@@ -109,14 +249,10 @@ export interface PaginatedResponse<T> {
   hasMore: boolean
 }
 
-// Auth Types
-export interface AuthResponse {
-  token: string
-  user: User
-  isNewUser: boolean
-}
+// ═══════════════════════════════
+// NAV TYPES
+// ═══════════════════════════════
 
-// Nav Types
 export interface NavItem {
   label: string
   href: string

@@ -38,7 +38,8 @@
       },
       "eas": {
         "projectId": "YOUR_EAS_PROJECT_ID"
-      }
+      },
+      "apiUrl": "http://192.168.29.16:3000"
     },
     "owner": "YOUR_EXPO_USERNAME"
   }

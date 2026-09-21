@@ -1,6 +1,25 @@
 import { Tabs } from 'expo-router'
-import { useColorScheme } from 'react-native'
-import { House, CalendarCheck, Wallet, User } from 'lucide-react-native'
+import { useColorScheme, Platform, Text } from 'react-native'
+import { COLORS } from '@/constants'
+
+function TabIcon({
+  emoji,
+  focused,
+}: {
+  emoji: string
+  focused: boolean
+}) {
+  return (
+    <Text
+      style={{
+        fontSize: focused ? 22 : 20,
+        opacity: focused ? 1 : 0.6,
+      }}
+    >
+      {emoji}
+    </Text>
+  )
+}
 
 export default function CustomerLayout() {
   const colorScheme = useColorScheme()
@@ -10,15 +29,15 @@ export default function CustomerLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#F97316',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textMuted,
         tabBarStyle: {
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-          borderTopColor: isDark ? '#334155' : '#F3F4F6',
+          backgroundColor: isDark ? '#1E293B' : COLORS.background,
+          borderTopColor: isDark ? '#334155' : COLORS.border,
           borderTopWidth: 1,
-          paddingBottom: 8,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 8,
-          height: 65,
+          height: Platform.OS === 'ios' ? 85 : 65,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -31,8 +50,17 @@ export default function CustomerLayout() {
         name="dashboard"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <House size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="🏠" focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="services"
+        options={{
+          title: 'Services',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="🔍" focused={focused} />
           ),
         }}
       />
@@ -40,17 +68,8 @@ export default function CustomerLayout() {
         name="bookings"
         options={{
           title: 'Bookings',
-          tabBarIcon: ({ color, size }) => (
-            <CalendarCheck size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          title: 'Wallet',
-          tabBarIcon: ({ color, size }) => (
-            <Wallet size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="📋" focused={focused} />
           ),
         }}
       />
@@ -58,9 +77,15 @@ export default function CustomerLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <User size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="👤" focused={focused} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

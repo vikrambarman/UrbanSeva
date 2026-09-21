@@ -9,11 +9,12 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useEffect } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
+import { useAuthStore } from '@/store/authStore'
 
-// Splash screen ko hold karo
+// Splash screen hold karo
 SplashScreen.preventAutoHideAsync()
 
-// Brand Theme
+// Brand themes
 const lightTheme = {
   ...MD3LightTheme,
   colors: {
@@ -47,10 +48,14 @@ const darkTheme = {
 export default function RootLayout() {
   const colorScheme = useColorScheme()
   const theme = colorScheme === 'dark' ? darkTheme : lightTheme
+  const { loadFromStorage } = useAuthStore()
 
   useEffect(() => {
-    // Fonts load hone ke baad splash hide karo
-    SplashScreen.hideAsync()
+    const prepare = async () => {
+      await loadFromStorage()
+      await SplashScreen.hideAsync()
+    }
+    prepare()
   }, [])
 
   return (

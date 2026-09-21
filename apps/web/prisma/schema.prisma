@@ -291,6 +291,7 @@ model Service {
   bookings     Booking[]
   reviews      Review[]
   faqs         ServiceFAQ[]
+  providerServices ProviderService[]
 
   @@index([subCategoryId])
   @@index([isTrending])
@@ -394,13 +395,28 @@ model Provider {
 }
 
 model ProviderService {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   providerId  String
   serviceId   String
   customPrice Float?
+  isActive    Boolean  @default(true)
+  assignedBy  String?
+  assignedAt  DateTime @default(now())
+  notes       String?
 
-  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider Provider @relation(
+    fields: [providerId],
+    references: [id],
+    onDelete: Cascade
+  )
+  service  Service  @relation(
+    fields: [serviceId],
+    references: [id],
+    onDelete: Cascade
+  )
 
+  @@unique([providerId, serviceId])
+  @@index([serviceId])
   @@index([providerId])
 }
 

@@ -9,7 +9,7 @@
       "distribution": "internal",
       "env": {
         "NODE_ENV": "development",
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.100:3000"
+        "EXPO_PUBLIC_API_URL": "http://192.168.29.16:3000"
       }
     },
     "preview": {
@@ -19,7 +19,7 @@
       },
       "env": {
         "NODE_ENV": "development",
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.100:3000"
+        "EXPO_PUBLIC_API_URL": "http://192.168.29.16:3000"
       }
     },
     "production": {
