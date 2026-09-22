@@ -255,6 +255,10 @@ CREATE TABLE "ProviderService" (
     "providerId" TEXT NOT NULL,
     "serviceId" TEXT NOT NULL,
     "customPrice" DOUBLE PRECISION,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "assignedBy" TEXT,
+    "assignedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notes" TEXT,
 
     CONSTRAINT "ProviderService_pkey" PRIMARY KEY ("id")
 );
@@ -622,25 +626,31 @@ CREATE INDEX "Service_isTrending_idx" ON "Service"("isTrending");
 CREATE INDEX "Service_isFeatured_idx" ON "Service"("isFeatured");
 
 -- CreateIndex
-CREATE INDEX "ServiceInclusion_serviceId_idx" ON "ServiceInclusion"("serviceId");
+CREATE UNIQUE INDEX "ServiceInclusion_serviceId_text_key" ON "ServiceInclusion"("serviceId", "text");
 
 -- CreateIndex
-CREATE INDEX "ServiceExclusion_serviceId_idx" ON "ServiceExclusion"("serviceId");
+CREATE UNIQUE INDEX "ServiceExclusion_serviceId_text_key" ON "ServiceExclusion"("serviceId", "text");
 
 -- CreateIndex
 CREATE INDEX "ServicePricing_serviceId_idx" ON "ServicePricing"("serviceId");
 
 -- CreateIndex
-CREATE INDEX "ServiceAddOn_serviceId_idx" ON "ServiceAddOn"("serviceId");
+CREATE UNIQUE INDEX "ServiceAddOn_serviceId_name_key" ON "ServiceAddOn"("serviceId", "name");
 
 -- CreateIndex
-CREATE INDEX "ServiceFAQ_serviceId_idx" ON "ServiceFAQ"("serviceId");
+CREATE UNIQUE INDEX "ServiceFAQ_serviceId_question_key" ON "ServiceFAQ"("serviceId", "question");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Provider_userId_key" ON "Provider"("userId");
 
 -- CreateIndex
+CREATE INDEX "ProviderService_serviceId_idx" ON "ProviderService"("serviceId");
+
+-- CreateIndex
 CREATE INDEX "ProviderService_providerId_idx" ON "ProviderService"("providerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProviderService_providerId_serviceId_key" ON "ProviderService"("providerId", "serviceId");
 
 -- CreateIndex
 CREATE INDEX "ProviderAvailability_providerId_idx" ON "ProviderAvailability"("providerId");
@@ -743,6 +753,9 @@ ALTER TABLE "Provider" ADD CONSTRAINT "Provider_userId_fkey" FOREIGN KEY ("userI
 
 -- AddForeignKey
 ALTER TABLE "ProviderService" ADD CONSTRAINT "ProviderService_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "Provider"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProviderService" ADD CONSTRAINT "ProviderService_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProviderAvailability" ADD CONSTRAINT "ProviderAvailability_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "Provider"("id") ON DELETE CASCADE ON UPDATE CASCADE;

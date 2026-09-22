@@ -2,83 +2,147 @@ import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
+  Image,
   StyleSheet,
   ActivityIndicator,
-  StatusBar,
+  RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { categoriesApi } from '@/lib/api'
-import { Category } from '@/types'
 import { COLORS } from '@/constants'
+
+interface SubCategory {
+  id: string
+  name: string
+  slug: string
+  image: string | null
+}
+
+interface Category {
+  id: string
+  name: string
+  slug: string
+  icon: string | null
+  image: string | null
+  subCategories: SubCategory[]
+}
 
 export default function ServicesScreen() {
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesApi.getAll()
+      if (response.data.success) {
+        setCategories(response.data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    } finally {
+      setIsLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const res = await categoriesApi.getAll()
-        if (res.data?.success) {
-          setCategories(res.data.data || [])
-        }
-      } catch (err) {
-        console.error('Categories fetch error:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
     fetchCategories()
   }, [])
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" />
+  const onRefresh = () => {
+    setRefreshing(true)
+    fetchCategories()
+  }
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>All Services</Text>
-        <Text style={styles.subtitle}>
-          Apni zaroorat ki service chuniye
-        </Text>
-      </View>
-
-      {/* Categories List */}
-      {isLoading ? (
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
-      ) : (
-        <FlatList
-          data={categories}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={styles.list}
-          columnWrapperStyle={styles.row}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() =>
-                router.push(`/services/${item.slug}` as never)
-              }
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cardIcon}>
-                {item.icon || '🔧'}
-              </Text>
-              <Text style={styles.cardName} numberOfLines={2}>
-                {item.name}
-              </Text>
-              <Text style={styles.cardCount}>
-                {item.subCategories?.length || 0} services
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
-      )}
+      </SafeAreaView>
+    )
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>All Services</Text>
+          <Text style={styles.subtitle}>Browse all available services</Text>
+        </View>
+
+        {/* Categories List */}
+        <View style={styles.categoriesContainer}>
+          {categories.map((category) => (
+            <View key={category.id} style={styles.categorySection}>
+              <TouchableOpacity
+                style={styles.categoryHeader}
+                onPress={() => router.push(`/services/${category.slug}`)}
+              >
+                <View style={styles.categoryInfo}>
+                  {category.image ? (
+                    <Image
+                      source={{ uri: category.image }}
+                      style={styles.categoryImage}
+                    />
+                  ) : (
+                    <View style={styles.categoryEmoji}>
+                      <Text style={styles.emojiText}>{category.icon || '🏠'}</Text>
+                    </View>
+                  )}
+                  <View style={styles.categoryText}>
+                    <Text style={styles.categoryName}>{category.name}</Text>
+                    <Text style={styles.categoryCount}>
+                      {category.subCategories?.length || 0} sub-categories
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.arrow}>→</Text>
+              </TouchableOpacity>
+
+              {/* Sub-categories preview */}
+              {category.subCategories && category.subCategories.length > 0 && (
+                <View style={styles.subCategoriesPreview}>
+                  {category.subCategories.slice(0, 3).map((subCat) => (
+                    <TouchableOpacity
+                      key={subCat.id}
+                      style={styles.subCategoryChip}
+                      onPress={() =>
+                        router.push(
+                          `/services/${category.slug}/${subCat.slug}`
+                        )
+                      }
+                    >
+                      <Text style={styles.subCategoryText}>{subCat.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {category.subCategories.length > 3 && (
+                    <TouchableOpacity
+                      style={styles.subCategoryChip}
+                      onPress={() => router.push(`/services/${category.slug}`)}
+                    >
+                      <Text style={styles.subCategoryText}>
+                        +{category.subCategories.length - 3} more
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
@@ -88,58 +152,102 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
   header: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.text,
   },
   subtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 4,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  categoriesContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
-  list: {
-    padding: 16,
-    gap: 12,
-  },
-  row: {
-    gap: 12,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: COLORS.primaryBg,
+  categorySection: {
+    marginBottom: 16,
+    backgroundColor: COLORS.card,
     borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#FED7AA',
-    minHeight: 110,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  categoryImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  categoryEmoji: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary + '20',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  cardIcon: {
-    fontSize: 36,
-    marginBottom: 8,
+  emojiText: {
+    fontSize: 24,
   },
-  cardName: {
-    fontSize: 13,
+  categoryText: {
+    flex: 1,
+  },
+  categoryName: {
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 4,
   },
-  cardCount: {
-    fontSize: 11,
+  categoryCount: {
+    fontSize: 12,
     color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  arrow: {
+    fontSize: 20,
+    color: COLORS.primary,
+  },
+  subCategoriesPreview: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  subCategoryChip: {
+    backgroundColor: COLORS.textMuted + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  subCategoryText: {
+    fontSize: 12,
+    color: COLORS.text,
   },
 })

@@ -32,8 +32,11 @@ function Header() {
         <Text style={styles.greeting}>Namaste! 👋</Text>
         <Text style={styles.location}>📍 {CITY}, CG</Text>
       </View>
-      <TouchableOpacity style={styles.notifBtn}>
-        <Text style={styles.notifIcon}>🔔</Text>
+      <TouchableOpacity
+        style={styles.searchBar}
+        onPress={() => router.push('/search')}
+      >
+        <Text style={styles.searchBarText}>🔍 Kaunsi service chahiye?</Text>
       </TouchableOpacity>
     </View>
   )

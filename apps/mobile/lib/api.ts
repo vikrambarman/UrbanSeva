@@ -62,26 +62,32 @@ api.interceptors.response.use(
 // API HELPERS
 // ═══════════════════════════════
 
+// Health API
 export const healthApi = {
   check: () => api.get('/health'),
 }
 
+// Categories API
 export const categoriesApi = {
   getAll: () => api.get('/categories'),
   getBySlug: (slug: string) => api.get(`/categories/${slug}`),
 }
 
+// Services API
 export const servicesApi = {
-  getTrending: (limit = 8) =>
-    api.get(`/services?trending=true&limit=${limit}`),
-  getFeatured: (limit = 6) =>
-    api.get(`/services?featured=true&limit=${limit}`),
-  getByCategory: (catSlug: string, limit = 10) =>
-    api.get(`/services?category=${catSlug}&limit=${limit}`),
-  getBySubCategory: (catSlug: string, subSlug: string) =>
-    api.get(`/services?category=${catSlug}&subcategory=${subSlug}`),
-  getBySlug: (slug: string) =>
-    api.get(`/services/${slug}`),
+  getTrending: () => api.get('/services?trending=true&limit=8'),
+  getByCategory: (categorySlug: string) =>
+    api.get(`/services?category=${categorySlug}`),
+  getFeatured: () => api.get('/services?featured=true&limit=6'),
+  getBySlug: (slug: string) => api.get(`/services/${slug}`),
+  search: (query: string, limit = 10) =>
+    api.get(`/services/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+}
+
+// Provider Services API
+export const providerServicesApi = {
+  getMyServices: (providerId: string) =>
+    api.get(`/providers/my-services?providerId=${providerId}`),
 }
 
 export const authApi = {

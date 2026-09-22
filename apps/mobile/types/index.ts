@@ -144,3 +144,72 @@ export interface ApiResponse<T> {
   error?: string
   message?: string
 }
+// ═══════════════════════════════
+// SERVICE DETAIL TYPES (Phase 4)
+// ═══════════════════════════════
+
+export interface ServiceInclusion {
+  id: string
+  serviceId: string
+  text: string
+  sortOrder: number
+}
+
+export interface ServiceExclusion {
+  id: string
+  serviceId: string
+  text: string
+  sortOrder: number
+}
+
+export interface ServicePricing {
+  id: string
+  serviceId: string
+  label: string
+  price: number
+  duration: string | null
+  sortOrder: number
+}
+
+export interface ServiceAddOn {
+  id: string
+  serviceId: string
+  name: string
+  price: number
+  description: string | null
+}
+
+export interface ServiceFAQ {
+  id: string
+  serviceId: string
+  question: string
+  answer: string
+  sortOrder: number
+}
+
+export interface ProviderInfo {
+  id: string
+  avgRating: number
+  totalJobs: number
+  experience: number
+  user: {
+    id: string
+    name: string | null
+    avatar: string | null
+  }
+}
+
+export interface ServiceDetail extends Service {
+  inclusions: ServiceInclusion[]
+  exclusions: ServiceExclusion[]
+  pricingTiers: ServicePricing[]
+  addOns: ServiceAddOn[]
+  faqs: ServiceFAQ[]
+  guarantee: string | null
+  providerServices: Array<{
+    id: string
+    isActive: boolean
+    customPrice: number | null
+    provider: ProviderInfo
+  }>
+}

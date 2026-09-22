@@ -305,8 +305,7 @@ model ServiceInclusion {
   sortOrder Int     @default(0)
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@index([serviceId])
+  @@unique([serviceId, text])
 }
 
 model ServiceExclusion {
@@ -317,7 +316,7 @@ model ServiceExclusion {
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@index([serviceId])
+  @@unique([serviceId, text])
 }
 
 model ServicePricing {
@@ -342,7 +341,7 @@ model ServiceAddOn {
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@index([serviceId])
+  @@unique([serviceId, name])
 }
 
 model ServiceFAQ {
@@ -354,7 +353,7 @@ model ServiceFAQ {
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@index([serviceId])
+  @@unique([serviceId, question])
 }
 
 // ═══════════════════════════════
@@ -404,16 +403,8 @@ model ProviderService {
   assignedAt  DateTime @default(now())
   notes       String?
 
-  provider Provider @relation(
-    fields: [providerId],
-    references: [id],
-    onDelete: Cascade
-  )
-  service  Service  @relation(
-    fields: [serviceId],
-    references: [id],
-    onDelete: Cascade
-  )
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@unique([providerId, serviceId])
   @@index([serviceId])
