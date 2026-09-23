@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -16,6 +16,8 @@ import {
   Wallet,
   LogOut,
   ChevronDown,
+  ShoppingCart,
+  MapPin,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,13 +37,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ThemeToggle } from './ThemeToggle'
 import { cn } from '@/lib/utils'
-
-// Temporary — Phase 5 mein real auth aayega
-const useAuthStore = () => ({
-  user: null as null | { name: string; phone: string; avatar?: string },
-  isAuthenticated: false,
-  logout: () => {},
-})
+import { useAuthStore } from '@/store/authStore'
+import { useCartStore } from '@/store/cartStore'
 
 const navLinks = [
   { label: 'Home', href: '/', icon: Home },
@@ -52,9 +49,20 @@ const navLinks = [
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const [cartItemsCount, setCartItemsCount] = useState(0) // Fix: Initialize with 0
   const pathname = usePathname()
   const router = useRouter()
+  
+  // Real auth store
   const { user, isAuthenticated, logout } = useAuthStore()
+  
+  // Cart store
+  const { getTotalItems } = useCartStore()
+
+  // Fix hydration error - update cart count on client side only
+  useEffect(() => {
+    setCartItemsCount(getTotalItems())
+  }, [getTotalItems])
 
   const handleLogout = () => {
     logout()
@@ -104,6 +112,22 @@ export default function Navbar() {
               <Search className="h-5 w-5" />
             </Button>
 
+            {/* Cart Icon */}
+            <Link href="/cart" className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ShoppingCart className="h-5 w-5" />
+                {cartItemsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+                    {cartItemsCount > 99 ? '99+' : cartItemsCount}
+                  </span>
+                )}
+              </Button>
+            </Link>
+
             {/* Theme Toggle */}
             <ThemeToggle />
 
@@ -117,34 +141,40 @@ export default function Navbar() {
                     className="flex items-center gap-2 px-2"
                   >
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatar} />
+                      <AvatarImage src={user.avatar || undefined} />
                       <AvatarFallback className="bg-primary text-white text-sm">
                         {user.name?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <span className="hidden sm:block text-sm font-medium">
-                      {user.name?.split(' ')[0]}
+                      {user.name?.split(' ')[0] || 'User'}
                     </span>
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link href="/(customer)/bookings" className="flex items-center gap-2">
+                    <Link href="/my-bookings" className="flex items-center gap-2">
                       <CalendarCheck className="h-4 w-4" />
                       My Bookings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/(customer)/profile" className="flex items-center gap-2">
+                    <Link href="/profile" className="flex items-center gap-2">
                       <User className="h-4 w-4" />
                       Profile
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/(customer)/wallet" className="flex items-center gap-2">
+                    <Link href="/wallet" className="flex items-center gap-2">
                       <Wallet className="h-4 w-4" />
                       Wallet
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/addresses" className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Addresses
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -164,7 +194,7 @@ export default function Navbar() {
                 className="hidden md:flex bg-primary hover:bg-primary/90 text-white"
                 size="sm"
               >
-                <Link href="/(auth)/login">Login</Link>
+                <Link href="/login">Login</Link>
               </Button>
             )}
 
@@ -208,6 +238,26 @@ export default function Navbar() {
                       </Link>
                     )
                   })}
+
+                  {/* Cart Link in Mobile */}
+                  <Link
+                    href="/cart"
+                    onClick={() => setIsOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                      pathname === '/cart'
+                        ? 'text-primary bg-primary/10'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <ShoppingCart className="h-5 w-5" />
+                    Cart
+                    {cartItemsCount > 0 && (
+                      <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5 font-semibold">
+                        {cartItemsCount}
+                      </span>
+                    )}
+                  </Link>
                 </nav>
 
                 {/* Mobile Auth */}
@@ -221,7 +271,7 @@ export default function Navbar() {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium text-sm">{user.name}</p>
+                          <p className="font-medium text-sm">{user.name || 'User'}</p>
                           <p className="text-xs text-muted-foreground">
                             {user.phone}
                           </p>
@@ -245,7 +295,7 @@ export default function Navbar() {
                       className="w-full bg-primary hover:bg-primary/90 text-white"
                       onClick={() => setIsOpen(false)}
                     >
-                      <Link href="/(auth)/login">Login / Register</Link>
+                      <Link href="/login">Login / Register</Link>
                     </Button>
                   )}
                 </div>

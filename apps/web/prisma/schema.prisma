@@ -170,9 +170,15 @@ model User {
   walletBalance Float       @default(0)
   loyaltyPoints Int         @default(0)
   loyaltyTier   LoyaltyTier @default(BRONZE)
+  
+  // NEW FIELDS - Login tracking
+  lastLoginAt   DateTime?
+  loginCount    Int         @default(0)
+  
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-
+  
+  // Relations
   bookings      Booking[]
   reviews       Review[]
   addresses     Address[]

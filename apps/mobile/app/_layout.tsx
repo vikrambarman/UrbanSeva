@@ -7,6 +7,7 @@ import {
   PaperProvider,
 } from 'react-native-paper'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useEffect } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
 import { useAuthStore } from '@/store/authStore'
@@ -48,27 +49,38 @@ const darkTheme = {
 export default function RootLayout() {
   const colorScheme = useColorScheme()
   const theme = colorScheme === 'dark' ? darkTheme : lightTheme
-  const { loadFromStorage } = useAuthStore()
+  const { initialize } = useAuthStore() // Changed from loadFromStorage
 
   useEffect(() => {
     const prepare = async () => {
-      await loadFromStorage()
-      await SplashScreen.hideAsync()
+      try {
+        await initialize() // Changed from loadFromStorage
+      } catch (error) {
+        console.error('Auth initialization error:', error)
+      } finally {
+        await SplashScreen.hideAsync()
+      }
     }
     prepare()
   }, [])
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PaperProvider theme={theme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(customer)" />
-          <Stack.Screen name="(provider)" />
-        </Stack>
-        <StatusBar style="auto" />
-      </PaperProvider>
+      <SafeAreaProvider>
+        <PaperProvider theme={theme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(customer)" />
+            <Stack.Screen name="services" />
+            <Stack.Screen name="service-detail" />
+            <Stack.Screen name="search" />
+            <Stack.Screen name="cart" /> {/* Add this */}
+            <Stack.Screen name="booking" />
+          </Stack>
+          <StatusBar style="auto" />
+        </PaperProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }

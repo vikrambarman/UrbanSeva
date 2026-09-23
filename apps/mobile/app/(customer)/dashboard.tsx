@@ -17,6 +17,8 @@ import { router } from 'expo-router'
 import { categoriesApi, servicesApi } from '@/lib/api'
 import { Category, Service } from '@/types'
 import { COLORS, APP_NAME, CITY } from '@/constants'
+import { Ionicons } from '@expo/vector-icons'
+import { useCartStore } from '@/lib/cartStore'
 
 const { width } = Dimensions.get('window')
 const CARD_WIDTH = (width - 48) / 2
@@ -26,18 +28,32 @@ const CARD_WIDTH = (width - 48) / 2
 // ═══════════════════════════════
 
 function Header() {
+
+   const { getTotalItems } = useCartStore()
+  const cartItemsCount = getTotalItems()
+
   return (
     <View style={styles.header}>
       <View>
         <Text style={styles.greeting}>Namaste! 👋</Text>
-        <Text style={styles.location}>📍 {CITY}, CG</Text>
+        <Text style={styles.location}>📍 Ambikapur, CG</Text>
       </View>
-      <TouchableOpacity
-        style={styles.searchBar}
-        onPress={() => router.push('/search')}
-      >
-        <Text style={styles.searchBarText}>🔍 Kaunsi service chahiye?</Text>
-      </TouchableOpacity>
+      <View style={styles.headerIcons}>
+        <TouchableOpacity
+          style={styles.cartIcon}
+          onPress={() => router.push('/cart')}
+        >
+          <Ionicons name="cart-outline" size={24} color={COLORS.text} />
+          {cartItemsCount > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{cartItemsCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity>
+          <Ionicons name="notifications-outline" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+      </View>
     </View>
   )
 }
@@ -231,6 +247,7 @@ export default function Dashboard() {
           />
         }
       >
+
         {/* Header */}
         <Header />
 
@@ -368,6 +385,31 @@ const styles = StyleSheet.create({
   },
   notifIcon: {
     fontSize: 18,
+  },
+
+  headerIcons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  cartIcon: {
+    position: 'relative',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  cartBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 
   // Search

@@ -12,6 +12,7 @@ import { ServiceFAQs } from '@/components/services/ServiceFAQs'
 import { PricingSelector } from '@/components/services/PricingSelector'
 import { AddOnSelector } from '@/components/services/AddOnSelector'
 import { StickyBookingBar } from '@/components/services/StickyBookingBar'
+import { AddToCartButton } from '@/components/services/AddToCartButton'
 
 interface Props {
   params: Promise<{ category: string; subcategory: string; service: string }>
@@ -179,13 +180,17 @@ export default async function ServiceDetailPage({ params }: Props) {
 
                 <Separator />
 
-                {/* Book Now Button */}
-                <a
-                  href={`/booking/${service.slug}`}
-                  className="block w-full text-center bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-colors"
-                >
-                  Book Now →
-                </a>
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <AddToCartButton service={service} />
+
+                  <a
+                    href={`/booking/${service.slug}`}
+                    className="block w-full text-center border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-colors"
+                  >
+                    Book Now →
+                  </a>
+                </div>
               </div>
             </div>
           </div>

@@ -1,153 +1,232 @@
+import React, { useState } from 'react'
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native'
-import { useState } from 'react'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
-import { StatusBar } from 'expo-status-bar'
+import { COLORS } from '@/constants'
+import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { toast } from '@/lib/toast'
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleLogin = () => {
-    if (phone.length === 10) {
-      router.push('/(auth)/verify')
+  const handleSendOTP = async () => {
+    // Validate phone
+    if (!/^\d{10}$/.test(phone)) {
+      toast.error('Please enter a valid 10-digit phone number')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch('http://192.168.29.16:3000/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success('OTP sent successfully!')
+        
+        // Store phone for verify screen
+        await AsyncStorage.setItem('pendingPhone', phone)
+        
+        // Show dev OTP in development
+        if (data.devOtp) {
+          toast.info(`Dev OTP: ${data.devOtp}`)
+        }
+
+        // Navigate to verify screen
+        router.push('/(auth)/verify')
+      } else {
+        toast.error(data.error || 'Failed to send OTP')
+      }
+    } catch (error) {
+      console.error('Send OTP error:', error)
+      toast.error('Failed to send OTP')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <StatusBar style="dark" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.emoji}>🏠</Text>
-        <Text style={styles.title}>ServiceApp</Text>
-        <Text style={styles.subtitle}>Ambikapur ka #1 Home Service</Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Logo/Icon */}
+          <View style={styles.iconContainer}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="call" size={40} color={COLORS.primary} />
+            </View>
+          </View>
 
-      {/* Form */}
-      <View style={styles.form}>
-        <Text style={styles.label}>Mobile Number</Text>
-        <View style={styles.inputContainer}>
-          <Text style={styles.prefix}>+91</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter 10-digit number"
-            keyboardType="numeric"
-            maxLength={10}
-            value={phone}
-            onChangeText={setPhone}
-          />
-        </View>
+          {/* Title */}
+          <Text style={styles.title}>Welcome to ServiceApp</Text>
+          <Text style={styles.subtitle}>Ambikapur ki har zaroorat, ek jagah</Text>
 
-        <TouchableOpacity
-          style={[
-            styles.button,
-            phone.length !== 10 && styles.buttonDisabled,
-          ]}
-          onPress={handleLogin}
-          disabled={phone.length !== 10}
-        >
-          <Text style={styles.buttonText}>Get OTP</Text>
-        </TouchableOpacity>
+          {/* Phone Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Phone Number</Text>
+            <View style={styles.phoneInputRow}>
+              <View style={styles.countryCode}>
+                <Text style={styles.countryCodeText}>+91</Text>
+              </View>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="Enter 10-digit number"
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType="number-pad"
+                maxLength={10}
+                value={phone}
+                onChangeText={(text) => setPhone(text.replace(/\D/g, ''))}
+              />
+            </View>
+            <Text style={styles.hint}>
+              Hum aapko verification OTP bhejenge
+            </Text>
+          </View>
 
-        <Text style={styles.terms}>
-          By continuing, you agree to our Terms & Privacy Policy
-        </Text>
-      </View>
-    </KeyboardAvoidingView>
+          {/* Send OTP Button */}
+          <TouchableOpacity
+            style={[
+              styles.button,
+              (loading || phone.length !== 10) && styles.buttonDisabled,
+            ]}
+            onPress={handleSendOTP}
+            disabled={loading || phone.length !== 10}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.buttonText}>Send OTP</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Terms */}
+          <Text style={styles.terms}>
+            Login karke aap hamare Terms & Conditions aur Privacy Policy se agree karte hain
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     padding: 24,
   },
-  header: {
-    flex: 1,
+  iconContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 24,
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 16,
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#F97316',
+    color: COLORS.text,
+    textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: 32,
   },
-  form: {
-    flex: 1,
-    justifyContent: 'center',
+  inputContainer: {
+    marginBottom: 24,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: COLORS.text,
     marginBottom: 8,
   },
-  inputContainer: {
+  phoneInputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
+    gap: 8,
+  },
+  countryCode: {
     paddingHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: '#F9FAFB',
-  },
-  prefix: {
-    fontSize: 16,
-    color: '#374151',
-    fontWeight: '600',
-    marginRight: 8,
-    paddingRight: 8,
-    borderRightWidth: 1,
-    borderRightColor: '#E5E7EB',
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#111827',
     paddingVertical: 14,
-    paddingLeft: 8,
+    backgroundColor: COLORS.textMuted + '20',
+    borderRadius: 12,
+    justifyContent: 'center',
+  },
+  countryCodeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  phoneInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  hint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 8,
   },
   button: {
-    backgroundColor: '#F97316',
-    borderRadius: 12,
+    backgroundColor: COLORS.primary,
     paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 16,
+    marginTop: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#FED7AA',
+    opacity: 0.5,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   terms: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: COLORS.textMuted,
     textAlign: 'center',
+    marginTop: 24,
     lineHeight: 18,
   },
 })

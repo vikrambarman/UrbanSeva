@@ -13,6 +13,8 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { servicesApi } from '@/lib/api'
 import { COLORS } from '@/constants'
 import { Ionicons } from '@expo/vector-icons'
+import { useCartStore } from '@/lib/cartStore'
+import { toast } from '@/lib/toast'
 
 interface ServiceDetail {
   id: string
@@ -48,6 +50,8 @@ export default function ServiceDetailScreen() {
   const [service, setService] = useState<ServiceDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null)
+
+  const { addItem } = useCartStore() // Add this
 
   useEffect(() => {
     if (slug) {
@@ -110,6 +114,26 @@ export default function ServiceDetailScreen() {
     )
   }
 
+
+  const handleAddToCart = () => {
+    if (!service) return
+
+    addItem({
+      serviceId: service.id,
+      serviceName: service.name,
+      serviceSlug: service.slug,
+      serviceImage: service.image,
+      categorySlug: service.subCategory.category.slug,
+      subCategorySlug: service.subCategory.slug,
+      selectedPricingLabel: service.pricingTiers[0]?.label || 'Standard',
+      selectedPrice: service.basePrice,
+      addOns: [],
+      quantity: 1,
+    })
+
+    toast.success('Added to cart!')
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -152,12 +176,12 @@ export default function ServiceDetailScreen() {
               )}
               {service.duration && (
                 <View style={styles.statItem}>
-                  <Ionicons name="time-outline" size={16} color={COLORS.muted} />
+                  <Ionicons name="time-outline" size={16} color={COLORS.textMuted} />
                   <Text style={styles.statText}>{service.duration}</Text>
                 </View>
               )}
               <View style={styles.statItem}>
-                <Ionicons name="person-outline" size={16} color={COLORS.muted} />
+                <Ionicons name="person-outline" size={16} color={COLORS.textMuted} />
                 <Text style={styles.statText}>
                   {service.professionals} Expert{service.professionals > 1 ? 's' : ''}
                 </Text>
@@ -249,7 +273,7 @@ export default function ServiceDetailScreen() {
                     <Ionicons
                       name={expandedFaq === faq.id ? 'chevron-up' : 'chevron-down'}
                       size={20}
-                      color={COLORS.muted}
+                      color={COLORS.textMuted}
                     />
                   </View>
                   {expandedFaq === faq.id && (
@@ -272,12 +296,21 @@ export default function ServiceDetailScreen() {
             <Text style={styles.bottomBarLabel}>Price</Text>
             <Text style={styles.bottomBarPrice}>{getPriceDisplay()}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.bookNowButton}
-            onPress={() => router.push(`/booking/${service.slug}`)}
-          >
-            <Text style={styles.bookNowText}>Book Now →</Text>
-          </TouchableOpacity>
+          <View style={styles.bottomBarButtons}>
+            <TouchableOpacity
+              style={styles.addToCartButton}
+              onPress={handleAddToCart}
+            >
+              <Ionicons name="cart-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.addToCartText}>Add to Cart</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bookNowButton}
+              onPress={() => router.push(`/booking/checkout`)}
+            >
+              <Text style={styles.bookNowText}>Book Now →</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -302,7 +335,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
     marginBottom: 16,
   },
   backButton: {
@@ -325,7 +358,7 @@ const styles = StyleSheet.create({
   heroImagePlaceholder: {
     width: '100%',
     height: 240,
-    backgroundColor: COLORS.muted + '10',
+    backgroundColor: COLORS.textMuted + '10',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -377,7 +410,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 13,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
   },
   section: {
     marginBottom: 24,
@@ -390,11 +423,11 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
     lineHeight: 22,
   },
   coveredSection: {
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -452,7 +485,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   faqItem: {
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
@@ -472,7 +505,7 @@ const styles = StyleSheet.create({
   },
   faqAnswer: {
     fontSize: 13,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
     marginTop: 8,
     lineHeight: 20,
   },
@@ -481,7 +514,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     padding: 12,
@@ -493,12 +526,33 @@ const styles = StyleSheet.create({
   },
   bottomBarLabel: {
     fontSize: 12,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
   },
   bottomBarPrice: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.primary,
+  },
+
+  bottomBarButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addToCartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 6,
+  },
+  addToCartText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   bookNowButton: {
     backgroundColor: COLORS.primary,

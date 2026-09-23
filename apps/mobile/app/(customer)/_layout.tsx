@@ -1,57 +1,27 @@
 import { Tabs } from 'expo-router'
-import { useColorScheme, Platform, Text } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { COLORS } from '@/constants'
-
-function TabIcon({
-  emoji,
-  focused,
-}: {
-  emoji: string
-  focused: boolean
-}) {
-  return (
-    <Text
-      style={{
-        fontSize: focused ? 22 : 20,
-        opacity: focused ? 1 : 0.6,
-      }}
-    >
-      {emoji}
-    </Text>
-  )
-}
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useCartStore } from '@/lib/cartStore'
 
 export default function CustomerLayout() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { getTotalItems } = useCartStore()
+  const cartItemsCount = getTotalItems()
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textMuted,
-        tabBarStyle: {
-          backgroundColor: isDark ? '#1E293B' : COLORS.background,
-          borderTopColor: isDark ? '#334155' : COLORS.border,
-          borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-          paddingTop: 8,
-          height: Platform.OS === 'ios' ? 85 : 65,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          marginTop: 2,
-        },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
         name="dashboard"
         options={{
           title: 'Home',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🏠" focused={focused} />
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
@@ -59,8 +29,8 @@ export default function CustomerLayout() {
         name="services"
         options={{
           title: 'Services',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🔍" focused={focused} />
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid" size={size} color={color} />
           ),
         }}
       />
@@ -68,8 +38,8 @@ export default function CustomerLayout() {
         name="bookings"
         options={{
           title: 'Bookings',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📋" focused={focused} />
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar" size={size} color={color} />
           ),
         }}
       />
@@ -77,17 +47,26 @@ export default function CustomerLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="👤" focused={focused} />
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size} color={color} />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          href: null,
+          tabBarBadge: cartItemsCount > 0 ? cartItemsCount : undefined,
+          tabBarBadgeStyle: cartItemsCount > 0 ? styles.cartBadge : undefined,
         }}
       />
     </Tabs>
   )
 }
+
+const styles = StyleSheet.create({
+  cartBadge: {
+    backgroundColor: COLORS.primary,
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    lineHeight: 18,
+  },
+})
