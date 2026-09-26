@@ -57,6 +57,7 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
+  REFUND_INITIATED
   REFUNDED
   PARTIALLY_REFUNDED
 }
@@ -160,6 +161,7 @@ model User {
   phone         String      @unique
   name          String?
   email         String?
+  password      String?     // <-- YE ADD KARO
   avatar        String?
   role          Role        @default(CUSTOMER)
   isActive      Boolean     @default(true)
@@ -800,4 +802,35 @@ model AppSetting {
   value       String
   description String?
   updatedAt   DateTime @updatedAt
+}
+
+
+// ═══════════════════════════════
+// GLOBAL FAQ MODEL
+// ═══════════════════════════════
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  category  String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+
+model ProviderInquiry {
+  id         String   @id @default(cuid())
+  name       String
+  phone      String   @unique
+  email      String?
+  experience Int?
+  services   String?  // Comma-separated service names
+  city       String?
+  message    String?  @db.Text
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED, CONTACTED
+  notes      String?  @db.Text // Admin notes
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

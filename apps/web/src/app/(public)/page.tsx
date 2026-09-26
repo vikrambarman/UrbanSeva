@@ -36,7 +36,7 @@ export default async function HomePage() {
     <>
       <HeroSection />
       <CategoryGrid categories={categories as CategoryWithSubs[]} />
-      <TrendingServices services={trendingServices as ServiceWithDetails[]} />
+      <TrendingServices services={trendingServices as unknown as ServiceWithDetails[]} />
       <HowItWorks />
       <SpecialOffers />
       <Testimonials />

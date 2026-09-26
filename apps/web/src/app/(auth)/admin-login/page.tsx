@@ -37,16 +37,27 @@ export default function AdminLoginPage() {
       const data = await response.json()
 
       if (data.success) {
+        const token = data.data?.token
+
+        if (!token) {
+          console.error('❌ No token in response:', data)
+          toast.error('Login failed: No token received')
+          return
+        }
+
+        // ✅ CORRECT: Pass BOTH user AND token
+        setUser(data.data.user, token)
+
         toast.success('Admin login successful!')
-        
-        localStorage.setItem('token', data.data.token)
-        setUser(data.data.user)
-        
-        router.push('/admin/dashboard')
+
+        setTimeout(() => {
+          router.push('/admin/dashboard')
+        }, 100)
       } else {
         toast.error(data.error || 'Invalid credentials')
       }
     } catch (error) {
+      console.error('Login error:', error)
       toast.error('Failed to login')
     } finally {
       setLoading(false)

@@ -77,7 +77,7 @@ export default function CategoryGrid({ categories }: Props) {
 
       {/* Category Modal */}
       <CategoryModal
-        category={selectedCategory}
+        category={selectedCategory as any}
         isOpen={isCategoryModalOpen}
         onClose={closeCategoryModal}
       />

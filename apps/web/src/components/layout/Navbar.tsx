@@ -1,3 +1,5 @@
+// components/Navbar.tsx
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -18,6 +20,7 @@ import {
   ChevronDown,
   ShoppingCart,
   MapPin,
+  Briefcase,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,22 +47,19 @@ const navLinks = [
   { label: 'Home', href: '/', icon: Home },
   { label: 'Services', href: '/services', icon: Wrench },
   { label: 'Property', href: '/property', icon: Building2 },
+  { label: 'Become Provider', href: '/become-provider', icon: Briefcase }, // ✅ NEW
   { label: 'About', href: '/about', icon: Info },
 ]
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
-  const [cartItemsCount, setCartItemsCount] = useState(0) // Fix: Initialize with 0
+  const [cartItemsCount, setCartItemsCount] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
   
-  // Real auth store
   const { user, isAuthenticated, logout } = useAuthStore()
-  
-  // Cart store
   const { getTotalItems } = useCartStore()
 
-  // Fix hydration error - update cart count on client side only
   useEffect(() => {
     setCartItemsCount(getTotalItems())
   }, [getTotalItems])
@@ -78,12 +78,12 @@ export default function Navbar() {
           <Link href="/" className="flex items-center gap-2">
             <span className="text-2xl">🏠</span>
             <span className="font-bold text-xl text-primary hidden sm:block">
-              ServiceApp
+              HomeServ
             </span>
           </Link>
 
           {/* Desktop Nav Links */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -188,14 +188,27 @@ export default function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              /* Logged Out — Login Button */
-              <Button
-                asChild
-                className="hidden md:flex bg-primary hover:bg-primary/90 text-white"
-                size="sm"
-              >
-                <Link href="/login">Login</Link>
-              </Button>
+              /* Logged Out — Login + Provider Buttons */
+              <div className="hidden md:flex items-center gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Link href="/become-provider">
+                    <Briefcase className="h-4 w-4" />
+                    Become Provider
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  className="bg-primary hover:bg-primary/90 text-white"
+                  size="sm"
+                >
+                  <Link href="/login">Login</Link>
+                </Button>
+              </div>
             )}
 
             {/* Mobile Hamburger */}
@@ -204,7 +217,7 @@ export default function Navbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden"
+                  className="lg:hidden"
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
@@ -213,7 +226,7 @@ export default function Navbar() {
                 <SheetHeader>
                   <SheetTitle className="flex items-center gap-2">
                     <span className="text-xl">🏠</span>
-                    <span className="text-primary">ServiceApp</span>
+                    <span className="text-primary">HomeServ</span>
                   </SheetTitle>
                 </SheetHeader>
 
@@ -290,13 +303,26 @@ export default function Navbar() {
                       </Button>
                     </div>
                   ) : (
-                    <Button
-                      asChild
-                      className="w-full bg-primary hover:bg-primary/90 text-white"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      <Link href="/login">Login / Register</Link>
-                    </Button>
+                    <div className="space-y-2">
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        <Link href="/become-provider">
+                          <Briefcase className="h-4 w-4" />
+                          Become Provider
+                        </Link>
+                      </Button>
+                      <Button
+                        asChild
+                        className="w-full bg-primary hover:bg-primary/90 text-white"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        <Link href="/login">Login / Register</Link>
+                      </Button>
+                    </div>
                   )}
                 </div>
               </SheetContent>
