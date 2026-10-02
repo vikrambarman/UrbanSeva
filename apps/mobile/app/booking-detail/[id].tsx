@@ -16,6 +16,8 @@ import { COLORS } from '@/constants'
 import { Ionicons } from '@expo/vector-icons'
 import * as SecureStore from 'expo-secure-store'
 import { toast } from '@/lib/toast'
+import RescheduleModal from '@/components/booking/RescheduleModal'
+import RefundModal from '@/components/booking/RefundModal'
 
 interface BookingDetail {
   id: string
@@ -69,6 +71,8 @@ export default function BookingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const [booking, setBooking] = useState<BookingDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showReschedule, setShowReschedule] = useState(false)
+  const [showRefund, setShowRefund] = useState(false)
 
   useEffect(() => {
     fetchBooking()
@@ -321,13 +325,44 @@ export default function BookingDetailScreen() {
           </View>
         )}
 
-        {/* Cancel Button */}
+        {/* Action Buttons */}
         {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
-          <TouchableOpacity style={styles.cancelButton} onPress={handleCancelBooking}>
-            <Ionicons name="close-circle-outline" size={20} color="#FFF" />
-            <Text style={styles.cancelButtonText}>Cancel Booking</Text>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.rescheduleButton} onPress={() => setShowReschedule(true)}>
+              <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.rescheduleButtonText}>Reschedule</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelBooking}>
+              <Ionicons name="close-circle-outline" size={20} color="#FFF" />
+              <Text style={styles.cancelButtonText}>Cancel Booking</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {booking.paymentStatus === 'PAID' && booking.status !== 'CANCELLED' && booking.status !== 'REFUNDED' && (
+          <TouchableOpacity style={styles.refundButton} onPress={() => setShowRefund(true)}>
+            <Ionicons name="refresh-outline" size={20} color="#EF4444" />
+            <Text style={styles.refundButtonText}>Request Refund</Text>
           </TouchableOpacity>
         )}
+
+        {/* Modals */}
+        <RescheduleModal
+          visible={showReschedule}
+          onClose={() => setShowReschedule(false)}
+          bookingId={booking.id}
+          currentDate={new Date(booking.scheduledDate).toLocaleDateString('en-IN')}
+          currentTime={booking.scheduledTime}
+          onSuccess={fetchBooking}
+        />
+
+        <RefundModal
+          visible={showRefund}
+          onClose={() => setShowRefund(false)}
+          bookingId={booking.id}
+          totalAmount={booking.totalAmount}
+          onSuccess={fetchBooking}
+        />
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -535,4 +570,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   backButtonText: { color: '#FFF', fontWeight: '600' },
+  actionButtons: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 12 },
+  rescheduleButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.primary + '20', paddingVertical: 14, borderRadius: 12 },
+  rescheduleButtonText: { fontSize: 15, fontWeight: '600', color: COLORS.primary },
+  refundButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, paddingVertical: 14, borderRadius: 12, backgroundColor: '#EF444420' },
+  refundButtonText: { fontSize: 15, fontWeight: '600', color: '#EF4444' },
 })

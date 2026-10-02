@@ -1,21 +1,15 @@
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'react-native'
-import {
-  MD3LightTheme,
-  MD3DarkTheme,
-  PaperProvider,
-} from 'react-native-paper'
+import { MD3LightTheme, MD3DarkTheme, PaperProvider } from 'react-native-paper'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useEffect } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
 import { useAuthStore } from '@/store/authStore'
 
-// Splash screen hold karo
 SplashScreen.preventAutoHideAsync()
 
-// Brand themes
 const lightTheme = {
   ...MD3LightTheme,
   colors: {
@@ -49,12 +43,12 @@ const darkTheme = {
 export default function RootLayout() {
   const colorScheme = useColorScheme()
   const theme = colorScheme === 'dark' ? darkTheme : lightTheme
-  const { initialize } = useAuthStore() // Changed from loadFromStorage
+  const { initialize } = useAuthStore()
 
   useEffect(() => {
     const prepare = async () => {
       try {
-        await initialize() // Changed from loadFromStorage
+        await initialize()
       } catch (error) {
         console.error('Auth initialization error:', error)
       } finally {
@@ -72,11 +66,14 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(customer)" />
+            <Stack.Screen name="(provider)" />
+            <Stack.Screen name="(admin)" />
             <Stack.Screen name="services" />
             <Stack.Screen name="service-detail" />
             <Stack.Screen name="search" />
-            <Stack.Screen name="cart" /> {/* Add this */}
+            <Stack.Screen name="cart" />
             <Stack.Screen name="booking" />
+            <Stack.Screen name="booking-detail" />
           </Stack>
           <StatusBar style="auto" />
         </PaperProvider>

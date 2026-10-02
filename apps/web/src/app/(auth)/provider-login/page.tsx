@@ -25,8 +25,7 @@ export default function ProviderLoginPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError("")
-        
-        // Validation
+
         if (!formData.phone || !formData.password) {
             setError("Please fill all fields")
             return
@@ -49,13 +48,11 @@ export default function ProviderLoginPage() {
             const data = await res.json()
 
             if (data.success) {
-                // Store token
-                localStorage.setItem('token', data.token)
-                localStorage.setItem('user', JSON.stringify(data.user))
-                
+                // ✅ UPDATED: Consistent with admin structure
+                localStorage.setItem('token', data.data.token)
+                localStorage.setItem('user', JSON.stringify(data.data.user))
+
                 toast.success("Login successful! Welcome back.")
-                
-                // Redirect to provider dashboard
                 router.push('/provider/dashboard')
             } else {
                 setError(data.error || "Login failed")
@@ -74,20 +71,20 @@ export default function ProviderLoginPage() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-100 p-4">
             <Card className="w-full max-w-md">
                 <CardHeader className="space-y-4">
-                    <Link 
-                        href="/" 
+                    <Link
+                        href="/"
                         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
                     >
                         <ArrowLeft className="h-4 w-4" />
                         Back to Home
                     </Link>
-                    
+
                     <div className="flex items-center justify-center">
                         <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                             <Briefcase className="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    
+
                     <div className="text-center">
                         <CardTitle className="text-2xl">Provider Login</CardTitle>
                         <CardDescription>
@@ -95,7 +92,7 @@ export default function ProviderLoginPage() {
                         </CardDescription>
                     </div>
                 </CardHeader>
-                
+
                 <CardContent>
                     {error && (
                         <Alert variant="destructive" className="mb-4">
@@ -126,8 +123,8 @@ export default function ProviderLoginPage() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="password">Password</Label>
-                                <Link 
-                                    href="/provider-forgot-password" 
+                                <Link
+                                    href="/provider-forgot-password"
                                     className="text-xs text-primary hover:underline"
                                 >
                                     Forgot password?
@@ -147,9 +144,9 @@ export default function ProviderLoginPage() {
                             />
                         </div>
 
-                        <Button 
-                            type="submit" 
-                            className="w-full" 
+                        <Button
+                            type="submit"
+                            className="w-full"
                             disabled={loading}
                         >
                             {loading ? (
@@ -175,9 +172,9 @@ export default function ProviderLoginPage() {
                             </div>
                         </div>
 
-                        <Button 
-                            asChild 
-                            variant="outline" 
+                        <Button
+                            asChild
+                            variant="outline"
                             className="w-full"
                         >
                             <Link href="/become-provider">

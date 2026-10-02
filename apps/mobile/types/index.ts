@@ -213,3 +213,196 @@ export interface ServiceDetail extends Service {
     provider: ProviderInfo
   }>
 }
+
+
+// ═══════════════════════════════════════════
+// PROVIDER TYPES (Phase 7)
+// ═══════════════════════════════════════════
+
+export interface ProviderProfile {
+  id: string
+  userId: string
+  bio: string | null
+  experience: number
+  aadharNumber: string | null
+  panNumber: string | null
+  aadharImage: string | null
+  panImage: string | null
+  policeVerified: boolean
+  portfolioImages: string[]
+  bankAccount: string | null
+  bankIFSC: string | null
+  bankName: string | null
+  upiId: string | null
+  commissionRate: number
+  status: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'SUSPENDED'
+  avgRating: number
+  totalJobs: number
+  totalEarnings: number
+  isAvailable: boolean
+  serviceAreas: string[]
+  createdAt: string
+  updatedAt: string
+  user: {
+    name: string | null
+    phone: string
+    email: string | null
+    avatar: string | null
+  }
+  services?: Array<{
+    id: string
+    service: { name: string; image: string | null }
+  }>
+  availability?: Array<{
+    id: string
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+    isAvailable: boolean
+  }>
+}
+
+export interface ProviderJob {
+  id: string
+  bookingNumber: string
+  status: BookingStatus
+  scheduledDate: string
+  scheduledTime: string
+  totalAmount: number
+  baseAmount: number
+  addOnAmount: number
+  specialInstructions?: string
+  startedAt?: string
+  completedAt?: string
+  user: { name: string | null; phone: string }
+  service: { name: string; image: string | null; duration: string }
+  address: { fullAddress: string; area: string; landmark?: string }
+  review?: { overallRating: number; comment?: string }
+}
+
+export interface ProviderEarning {
+  id: string
+  gross: number
+  commission: number
+  net: number
+  status: 'PENDING' | 'SETTLED' | 'PAYOUT_INITIATED' | 'PAID'
+  createdAt: string
+}
+
+export interface ProviderPayout {
+  id: string
+  amount: number
+  method: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  reference: string | null
+  processedAt: string | null
+  createdAt: string
+}
+
+export interface ProviderReview {
+  id: string
+  overallRating: number
+  punctualityRating: number | null
+  qualityRating: number | null
+  behaviourRating: number | null
+  valueRating: number | null
+  comment: string | null
+  photos: string[]
+  providerReply: string | null
+  createdAt: string
+  user: { name: string | null; avatar: string | null }
+  service: { name: string }
+  booking: { bookingNumber: string }
+}
+
+// ═══════════════════════════════════════════
+// ADMIN TYPES (Phase 7)
+// ═══════════════════════════════════════════
+
+export interface AdminDashboardStats {
+  totalUsers: number
+  totalProviders: number
+  totalBookings: number
+  totalRevenue: number
+  pendingBookings: number
+  recentBookings: Booking[]
+}
+
+export interface AdminUser {
+  id: string
+  name: string | null
+  phone: string
+  email: string | null
+  avatar: string | null
+  role: UserRole
+  isActive: boolean
+  isVerified: boolean
+  createdAt: string
+  walletBalance: number
+  loyaltyTier: LoyaltyTier
+  _count: { bookings: number; reviews: number }
+}
+
+export interface AdminProvider {
+  id: string
+  status: string
+  avgRating: number
+  totalJobs: number
+  totalEarnings: number
+  commissionRate: number
+  user: { name: string | null; phone: string; email: string | null; avatar: string | null }
+  _count?: { services: number; bookings: number }
+}
+
+export interface AdminService {
+  id: string
+  name: string
+  slug: string
+  image: string | null
+  basePrice: number
+  isActive: boolean
+  isTrending: boolean
+  isFeatured: boolean
+  subCategory: { name: string; category: { name: string } }
+  _count: { bookings: number; reviews: number }
+}
+
+export interface FinanceStats {
+  totalRevenue: number
+  totalBookings: number
+  platformCommission: number
+  providerEarnings: number
+  grossEarnings: number
+  totalRefunds: number
+  refundCount: number
+  pendingPayouts: number
+}
+
+export interface AnalyticsSales {
+  chartData: Array<{ date: string; revenue: number; bookings: number }>
+  summary: {
+    totalRevenue: number
+    totalBookings: number
+    avgOrderValue: number
+    period: string
+  }
+}
+
+export interface AnalyticsServices {
+  topServices: Array<{
+    id: string
+    name: string
+    image: string | null
+    basePrice: number
+    avgRating: number
+    _count: { bookings: number; reviews: number }
+  }>
+  categoryData: Array<{ name: string; bookings: number }>
+}
+
+export interface AnalyticsCustomers {
+  newUsers: number
+  activeUsers: number
+  tierDistribution: Array<{ tier: string; count: number }>
+  retention: { repeat: number; new: number; retentionRate: number }
+}

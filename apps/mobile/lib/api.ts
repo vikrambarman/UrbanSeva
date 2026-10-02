@@ -108,3 +108,96 @@ export const bookingsApi = {
   cancel: (id: string, reason: string) =>
     api.patch(`/bookings/${id}/cancel`, { reason }),
 }
+
+
+// ═══════════════════════════════════════════
+// PROVIDER APIs (Phase 7)
+// ═══════════════════════════════════════════
+
+export const providerApi = {
+  getProfile: () => api.get('/provider/profile'),
+  updateProfile: (data: Record<string, unknown>) => api.put('/provider/profile', data),
+  getDocuments: () => api.get('/provider/documents'),
+  updateDocuments: (data: Record<string, unknown>) => api.put('/provider/documents', data),
+  getBankDetails: () => api.get('/provider/bank-details'),
+  updateBankDetails: (data: Record<string, unknown>) => api.put('/provider/bank-details', data),
+  getJobs: (status = 'ALL') => api.get(`/provider/jobs?status=${status}`),
+  getJobById: (id: string) => api.get(`/provider/jobs/${id}`),
+  updateJobStatus: (id: string, action: string, extra?: Record<string, unknown>) =>
+    api.post(`/provider/jobs/${id}/status`, { action, ...extra }),
+  getEarnings: (period = 'all') => api.get(`/provider/earnings?period=${period}`),
+  getPayouts: () => api.get('/provider/earnings/payouts'),
+  requestPayout: () => api.post('/provider/earnings/payouts'),
+  getReviews: () => api.get('/provider/reviews'),
+  replyToReview: (id: string, reply: string) =>
+    api.post(`/provider/reviews/${id}/reply`, { reply }),
+}
+
+// ═══════════════════════════════════════════
+// ADMIN APIs (Phase 7)
+// ═══════════════════════════════════════════
+
+export const adminApi = {
+  getDashboard: () => api.get('/admin/dashboard'),
+
+  // Users
+  getUsers: (params: Record<string, string> = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return api.get(`/admin/users?${query}`)
+  },
+  getUserById: (id: string) => api.get(`/admin/users/${id}`),
+  blockUser: (id: string) => api.post(`/admin/users/${id}/block`),
+  unblockUser: (id: string) => api.post(`/admin/users/${id}/unblock`),
+
+  // Providers
+  getProviders: (params: Record<string, string> = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return api.get(`/admin/providers?${query}`)
+  },
+  getProviderById: (id: string) => api.get(`/admin/providers/${id}`),
+  getProviderApplications: () => api.get('/admin/providers/applications'),
+  approveProvider: (id: string) => api.post(`/admin/providers/${id}/approve`),
+  rejectProvider: (id: string) => api.post(`/admin/providers/${id}/reject`),
+
+  // Services
+  getServices: (params: Record<string, string> = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return api.get(`/admin/services?${query}`)
+  },
+
+  // Bookings
+  getBookings: (params: Record<string, string> = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return api.get(`/admin/bookings?${query}`)
+  },
+  getBookingById: (id: string) => api.get(`/admin/bookings/${id}`),
+  assignProvider: (bookingId: string, providerId: string) =>
+    api.post(`/admin/bookings/${bookingId}/assign`, { providerId }),
+  cancelBooking: (bookingId: string, reason: string) =>
+    api.post(`/admin/bookings/${bookingId}/cancel`, { reason }),
+
+  // Finance
+  getFinanceStats: (period = 'all') => api.get(`/admin/finance/stats?period=${period}`),
+  getPayouts: (status = 'ALL') => api.get(`/admin/finance/payouts?status=${status}`),
+  processPayout: (payoutId: string) =>
+    api.post('/admin/finance/payouts', { payoutId }),
+  getRefunds: () => api.get('/admin/finance/refunds'),
+  processRefund: (bookingId: string) =>
+    api.post('/admin/finance/refunds', { bookingId }),
+
+  // Analytics
+  getSalesAnalytics: (period = '30') => api.get(`/admin/analytics/sales?period=${period}`),
+  getServiceAnalytics: () => api.get('/admin/analytics/services'),
+  getCustomerAnalytics: (period = '30') => api.get(`/admin/analytics/customers?period=${period}`),
+}
+
+// ═══════════════════════════════════════════
+// BOOKING ADVANCED APIs (Phase 7)
+// ═══════════════════════════════════════════
+
+export const bookingAdvancedApi = {
+  reschedule: (id: string, newDate: string, newTime: string, reason?: string) =>
+    api.post(`/bookings/${id}/reschedule`, { newDate, newTime, reason }),
+  refund: (id: string, reason: string, amount?: number) =>
+    api.post(`/bookings/${id}/refund`, { reason, amount }),
+}
