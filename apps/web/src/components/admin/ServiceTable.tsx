@@ -1,3 +1,5 @@
+// components/admin/ServiceTable.tsx
+
 "use client"
 
 import { Badge } from "@/components/ui/badge"
@@ -6,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Edit, Trash2, Search, RotateCcw, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react"
+import { Edit, Trash2, Search, RotateCcw, ChevronLeft, ChevronRight, Eye, EyeOff, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 interface Service {
@@ -33,15 +35,19 @@ interface ServiceTableProps {
     onToggleActive: (id: string, currentStatus: boolean) => void
     onDelete: (id: string) => void
     onPageChange: (page: number) => void
+    // CHANGE: isLoading prop added — ServicesList se useTransition ka pending state aayega
+    // Jab URL change hoga aur server component re-render hoga, tab tak loading dikhega
+    isLoading?: boolean
 }
 
 export function ServiceTable({ 
     services, search, status, pagination, onSearchChange, onStatusChange, 
-    onReset, onToggleActive, onDelete, onPageChange 
+    onReset, onToggleActive, onDelete, onPageChange, isLoading = false
 }: ServiceTableProps) {
     return (
         <TooltipProvider>
             <div className="space-y-4">
+                {/* Filters Row */}
                 <div className="flex flex-col sm:flex-row gap-4">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -70,138 +76,141 @@ export function ServiceTable({
                     </Button>
                 </div>
 
-                <div className="rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Service</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Base Price</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Tags</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {services.length === 0 ? (
+                {/* CHANGE: Table wrapper mein relative positioning + loading overlay */}
+                <div className="relative">
+                    {/* CHANGE: Loading overlay — jab server navigation ho rahi ho */}
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-background/60 z-10 flex items-center justify-center rounded-md">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                    )}
+                    
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                        No services found.
-                                    </TableCell>
+                                    <TableHead>Service</TableHead>
+                                    <TableHead>Category</TableHead>
+                                    <TableHead>Base Price</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Tags</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
-                            ) : (
-                                services.map((service) => (
-                                    <TableRow key={service.id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                {service.image ? (
-                                                    <img 
-                                                        src={service.image} 
-                                                        alt={service.name} 
-                                                        className="w-10 h-10 rounded-md object-cover" 
-                                                    />
-                                                ) : (
-                                                    <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center text-xs">
-                                                        No Img
-                                                    </div>
-                                                )}
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium">{service.name}</span>
-                                                    <span className="text-xs text-muted-foreground">{service.slug}</span>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm">{service.subCategory?.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {service.subCategory?.category?.name}
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>₹{service.basePrice}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={service.isActive ? 'default' : 'secondary'}>
-                                                {service.isActive ? 'Active' : 'Inactive'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                {service.isTrending && (
-                                                    <Badge variant="outline" className="text-orange-500 border-orange-500">
-                                                        Trending
-                                                    </Badge>
-                                                )}
-                                                {service.isFeatured && (
-                                                    <Badge variant="outline" className="text-purple-500 border-purple-500">
-                                                        Featured
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-2">
-                                                {/* ✅ Edit Button with Tooltip */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button asChild variant="ghost" size="icon" className="hover:bg-blue-50 hover:text-blue-600">
-                                                            <Link href={`/admin/services/${service.id}/edit`}>
-                                                                <Edit className="h-4 w-4" />
-                                                            </Link>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>Edit Service</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-
-                                                {/* ✅ Toggle Active/Inactive with Tooltip */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            onClick={() => onToggleActive(service.id, service.isActive)}
-                                                            className={service.isActive 
-                                                                ? "hover:bg-green-50 hover:text-green-600" 
-                                                                : "hover:bg-orange-50 hover:text-orange-600"
-                                                            }
-                                                        >
-                                                            {service.isActive ? (
-                                                                <Eye className="h-4 w-4 text-green-600" />
-                                                            ) : (
-                                                                <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                                            )}
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{service.isActive ? 'Deactivate Service' : 'Activate Service'}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-
-                                                {/* ✅ Delete Button with Tooltip */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            onClick={() => onDelete(service.id)}
-                                                            className="hover:bg-red-50 hover:text-red-600"
-                                                        >
-                                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>Delete Service</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </div>
+                            </TableHeader>
+                            <TableBody>
+                                {services.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                            No services found.
                                         </TableCell>
                                     </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
+                                ) : (
+                                    services.map((service) => (
+                                        <TableRow key={service.id}>
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    {service.image ? (
+                                                        <img 
+                                                            src={service.image} 
+                                                            alt={service.name} 
+                                                            className="w-10 h-10 rounded-md object-cover" 
+                                                        />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center text-xs">
+                                                            No Img
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">{service.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{service.slug}</span>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm">{service.subCategory?.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {service.subCategory?.category?.name}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>₹{service.basePrice}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={service.isActive ? 'default' : 'secondary'}>
+                                                    {service.isActive ? 'Active' : 'Inactive'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-1">
+                                                    {service.isTrending && (
+                                                        <Badge variant="outline" className="text-orange-500 border-orange-500">
+                                                            Trending
+                                                        </Badge>
+                                                    )}
+                                                    {service.isFeatured && (
+                                                        <Badge variant="outline" className="text-purple-500 border-purple-500">
+                                                            Featured
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button asChild variant="ghost" size="icon" className="hover:bg-blue-50 hover:text-blue-600">
+                                                                <Link href={`/admin/services/${service.id}/edit`}>
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Link>
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Edit Service</p></TooltipContent>
+                                                    </Tooltip>
+
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                onClick={() => onToggleActive(service.id, service.isActive)}
+                                                                className={service.isActive 
+                                                                    ? "hover:bg-green-50 hover:text-green-600" 
+                                                                    : "hover:bg-orange-50 hover:text-orange-600"
+                                                                }
+                                                            >
+                                                                {service.isActive ? (
+                                                                    <Eye className="h-4 w-4 text-green-600" />
+                                                                ) : (
+                                                                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                                                )}
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>{service.isActive ? 'Deactivate Service' : 'Activate Service'}</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                onClick={() => onDelete(service.id)}
+                                                                className="hover:bg-red-50 hover:text-red-600"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Delete Service</p></TooltipContent>
+                                                    </Tooltip>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </div>
 
                 {/* Pagination */}
@@ -224,7 +233,6 @@ export function ServiceTable({
                             </Button>
                             <div className="flex items-center gap-1">
                                 {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
-                                    // Show first, last, current, and surrounding pages
                                     let page: number
                                     if (pagination.totalPages <= 5) {
                                         page = i + 1

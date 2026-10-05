@@ -1,3 +1,5 @@
+// api/bookings/create/route.ts
+
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
@@ -82,6 +84,21 @@ export async function POST(request: Request) {
                         phone: true,
                     },
                 },
+            },
+        })
+
+        // ═══════════════════════════════════════════════════════════════
+        // ✅ FIX: Payment record create karo — PENDING status ke saath
+        // Pehle ye missing tha — isliye admin panel mein payment tab khali rehta tha
+        // Jab /api/payments/create-order call hoga, tab ye record update hoga
+        // razorpayOrderId ke saath, aur /api/payments/verify mein status PAID hoga
+        // ═══════════════════════════════════════════════════════════════
+        await db.payment.create({
+            data: {
+                bookingId: booking.id,
+                amount: totalAmount,
+                currency: 'INR',
+                status: 'PENDING',
             },
         })
 
