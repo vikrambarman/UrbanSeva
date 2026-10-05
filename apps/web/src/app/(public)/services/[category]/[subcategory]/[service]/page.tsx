@@ -15,6 +15,7 @@ import { AddOnSelector } from '@/components/services/AddOnSelector'
 import { StickyBookingBar } from '@/components/services/StickyBookingBar'
 import { AddToCartButton } from '@/components/services/AddToCartButton'
 import { SITE_CONFIG } from '@/lib/config'
+import { BookNowButton } from '@/components/services/BookNowButton'
 
 // ✅ ENHANCED — Premium service detail page
 // Changes:
@@ -195,14 +196,7 @@ export default async function ServiceDetailPage({ params }: Props) {
                 <div className="space-y-3">
                   <AddToCartButton service={service} />
 
-                  {/* ✅ FIX: "→" character → ArrowRight icon */}
-                  <Link
-                    href={`/booking/${service.slug}`}
-                    className="flex items-center justify-center gap-2 w-full border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-colors"
-                  >
-                    <span>Book Now</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  <BookNowButton service={service} />
                 </div>
               </div>
             </div>
@@ -210,7 +204,7 @@ export default async function ServiceDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <StickyBookingBar service={service} serviceUrl={`/booking/${service.slug}`} />
+      <StickyBookingBar service={service} />
     </div>
   )
 }

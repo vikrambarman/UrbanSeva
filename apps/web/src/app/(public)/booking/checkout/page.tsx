@@ -1,3 +1,5 @@
+// app/(public)/booking/checkout/page.tsx
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,14 +11,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Calendar, Clock, MapPin, CreditCard, ArrowLeft, ArrowRight } from 'lucide-react'
+import {
+    Calendar,
+    Clock,
+    MapPin,
+    CreditCard,
+    ArrowLeft,
+    ArrowRight,
+    Shield,
+    CheckCircle2,
+    Truck,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
+import { ServiceImageWithFallback } from '@/components/services/ServiceImageWithFallback'
 
 export default function CheckoutPage() {
     const router = useRouter()
     const { items, getTotalAmount, clearCart } = useCartStore()
-    const { user, isAuthenticated, token } = useAuthStore() // ← token add karo
+    const { user, isAuthenticated, token } = useAuthStore()
 
     const [currentStep, setCurrentStep] = useState(1)
     const [scheduledDate, setScheduledDate] = useState('')
@@ -39,17 +52,23 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (!isAuthenticated) {
             toast.error('Please login to continue')
-            router.push('/login')
+            router.push('/login?redirect=/booking/checkout')
         }
     }, [isAuthenticated, router])
 
     // Check if cart is empty
     useEffect(() => {
-        if (items.length === 0) {
-            toast.error('Your cart is empty')
-            router.push('/cart')
+        if (items.length === 0 && !loading) {
+            // Sirf tab redirect karo jab initial load ho
+            const timer = setTimeout(() => {
+                if (items.length === 0) {
+                    toast.error('Your cart is empty')
+                    router.push('/cart')
+                }
+            }, 1000)
+            return () => clearTimeout(timer)
         }
-    }, [items, router])
+    }, [items, router, loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Generate available dates (next 7 days)
     const availableDates = Array.from({ length: 7 }, (_, i) => {
@@ -75,7 +94,7 @@ export default function CheckoutPage() {
         }
         if (!isAuthenticated || !token) {
             toast.error('Please login to continue')
-            router.push('/login')
+            router.push('/login?redirect=/booking/checkout')
             return
         }
 
@@ -136,7 +155,9 @@ export default function CheckoutPage() {
                 key: orderData.data.keyId,
                 amount: orderData.data.amount,
                 currency: orderData.data.currency,
-                name: 'ServiceApp',
+                // CHANGE: Hardcoded 'ServiceApp' → SITE_CONFIG.name use karo
+                // (import karke, ya filhaal consistent naam rakho)
+                name: 'HomeServices',
                 description: 'Service Booking Payment',
                 order_id: orderData.data.orderId,
                 handler: async function (response: any) {
@@ -170,8 +191,10 @@ export default function CheckoutPage() {
                     email: user?.email || '',
                     contact: user?.phone || '',
                 },
+                // CHANGE: Razorpay theme color — ORANGE (#F97316) → TEAL (#0D9488)
+                // Design system mein orange REJECTED hai, teal primary color hai
                 theme: {
-                    color: '#F97316', // Your brand color
+                    color: '#0D9488',
                 },
                 modal: {
                     ondismiss: function () {
@@ -196,8 +219,9 @@ export default function CheckoutPage() {
 
     return (
         <div className="min-h-screen bg-background">
-            <div className="container mx-auto px-4 py-8">
-                {/* Header */}
+            {/* CHANGE: Container width fix — max-w-[1400px] mx-auto px-4 md:px-6 */}
+            <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-8">
+                {/* CHANGE: Hero header added — consistent with other enhanced pages */}
                 <div className="mb-8">
                     <Button
                         variant="ghost"
@@ -207,10 +231,18 @@ export default function CheckoutPage() {
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Back to Cart
                     </Button>
-                    <h1 className="text-3xl font-bold">Checkout</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Complete your booking in 3 simple steps
-                    </p>
+
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-bold">Checkout</h1>
+                            <p className="text-muted-foreground text-sm mt-0.5">
+                                Complete your booking in 3 simple steps
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Progress Steps */}
@@ -226,15 +258,16 @@ export default function CheckoutPage() {
                                 <div key={step.num} className="flex items-center">
                                     <div
                                         className={`flex items-center gap-2 px-4 py-2 rounded-full ${currentStep >= step.num
-                                            ? 'bg-primary text-primary-foreground'
+                                            ? 'bg-primary text-white'
                                             : 'bg-muted text-muted-foreground'
                                             }`}
                                     >
                                         <Icon className="w-4 h-4" />
-                                        <span className="text-sm font-medium">{step.label}</span>
+                                        <span className="text-sm font-medium hidden sm:inline">{step.label}</span>
+                                        <span className="text-sm font-medium sm:hidden">{step.num}</span>
                                     </div>
                                     {idx < 2 && (
-                                        <div className={`w-12 h-0.5 mx-2 ${currentStep > step.num ? 'bg-primary' : 'bg-muted'
+                                        <div className={`w-8 sm:w-12 h-0.5 mx-2 ${currentStep > step.num ? 'bg-primary' : 'bg-muted'
                                             }`} />
                                     )}
                                 </div>
@@ -251,7 +284,7 @@ export default function CheckoutPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
-                                        <Calendar className="w-5 h-5" />
+                                        <Calendar className="w-5 h-5 text-primary" />
                                         Select Date & Time
                                     </CardTitle>
                                 </CardHeader>
@@ -272,7 +305,7 @@ export default function CheckoutPage() {
                                                         key={date}
                                                         variant={scheduledDate === date ? 'default' : 'outline'}
                                                         onClick={() => setScheduledDate(date)}
-                                                        className="h-auto py-3 flex flex-col"
+                                                        className={`h-auto py-3 flex flex-col ${scheduledDate === date ? 'bg-primary text-white' : ''}`}
                                                     >
                                                         <span className="text-xs">{dayName}</span>
                                                         <span className="text-lg font-bold">{dayNum}</span>
@@ -301,7 +334,7 @@ export default function CheckoutPage() {
                                                         key={time}
                                                         variant={scheduledTime === time ? 'default' : 'outline'}
                                                         onClick={() => setScheduledTime(time)}
-                                                        className="h-auto py-3"
+                                                        className={`h-auto py-3 ${scheduledTime === time ? 'bg-primary text-white' : ''}`}
                                                     >
                                                         <Clock className="w-4 h-4 mr-2" />
                                                         {displayTime}
@@ -314,7 +347,7 @@ export default function CheckoutPage() {
                                     <Button
                                         onClick={() => setCurrentStep(2)}
                                         disabled={!scheduledDate || !scheduledTime}
-                                        className="w-full"
+                                        className="w-full bg-primary hover:bg-primary/90 text-white"
                                         size="lg"
                                     >
                                         Continue to Address
@@ -329,7 +362,7 @@ export default function CheckoutPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
-                                        <MapPin className="w-5 h-5" />
+                                        <MapPin className="w-5 h-5 text-primary" />
                                         Service Address
                                     </CardTitle>
                                 </CardHeader>
@@ -404,7 +437,7 @@ export default function CheckoutPage() {
                                         <Button
                                             onClick={() => setCurrentStep(3)}
                                             disabled={!address.fullAddress || !address.area || !address.pincode}
-                                            className="flex-1"
+                                            className="flex-1 bg-primary hover:bg-primary/90 text-white"
                                             size="lg"
                                         >
                                             Review Order
@@ -420,15 +453,15 @@ export default function CheckoutPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
-                                        <CreditCard className="w-5 h-5" />
+                                        <CreditCard className="w-5 h-5 text-primary" />
                                         Review & Confirm
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     {/* Schedule Summary */}
-                                    <div className="p-4 bg-muted rounded-lg">
+                                    <div className="p-4 bg-muted/50 rounded-lg border">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <Calendar className="w-4 h-4" />
+                                            <Calendar className="w-4 h-4 text-primary" />
                                             <span className="font-semibold">Schedule</span>
                                         </div>
                                         <p className="text-sm">
@@ -442,9 +475,9 @@ export default function CheckoutPage() {
                                     </div>
 
                                     {/* Address Summary */}
-                                    <div className="p-4 bg-muted rounded-lg">
+                                    <div className="p-4 bg-muted/50 rounded-lg border">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <MapPin className="w-4 h-4" />
+                                            <MapPin className="w-4 h-4 text-primary" />
                                             <span className="font-semibold">Address</span>
                                         </div>
                                         <p className="text-sm font-medium">{address.label}</p>
@@ -461,16 +494,12 @@ export default function CheckoutPage() {
                                             {items.map((item) => (
                                                 <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg">
                                                     <div className="relative w-12 h-12 rounded overflow-hidden flex-shrink-0">
-                                                        {item.serviceImage ? (
-                                                            <Image
-                                                                src={item.serviceImage}
-                                                                alt={item.serviceName}
-                                                                fill
-                                                                className="object-cover"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-full h-full bg-muted" />
-                                                        )}
+                                                        <ServiceImageWithFallback
+                                                            src={item.serviceImage}
+                                                            alt={item.serviceName}
+                                                            categorySlug={item.categorySlug}
+                                                            className="object-cover"
+                                                        />
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="font-medium text-sm">{item.serviceName}</p>
@@ -499,10 +528,10 @@ export default function CheckoutPage() {
                                         <Button
                                             onClick={handleCreateBooking}
                                             disabled={loading}
-                                            className="flex-1 bg-primary hover:bg-primary/90"
+                                            className="flex-1 bg-primary hover:bg-primary/90 text-white"
                                             size="lg"
                                         >
-                                            {loading ? 'Processing...' : 'Confirm Booking'}
+                                            {loading ? 'Processing...' : 'Confirm & Pay'}
                                             <ArrowRight className="w-4 h-4 ml-2" />
                                         </Button>
                                     </div>
@@ -535,10 +564,20 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
 
-                                <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-                                    <p>✓ Secure booking</p>
-                                    <p>✓ Verified professionals</p>
-                                    <p>✓ Quality guarantee</p>
+                                {/* CHANGE: Trust indicators — Lucide icons, no emoji */}
+                                <div className="space-y-2 pt-4 border-t">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Shield className="w-3.5 h-3.5 text-primary" />
+                                        <span>Secure payment via Razorpay</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                                        <span>Verified professionals</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Truck className="w-3.5 h-3.5 text-primary" />
+                                        <span>On-time service guarantee</span>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
