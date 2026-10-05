@@ -1,66 +1,82 @@
+import { Search, CalendarDays, Home } from 'lucide-react'
+
+// ✅ REWRITE — Production-ready version
+// Changes:
+// 1. Emoji icons (🔍📅🏠) → Lucide React icons (established rule)
+// 2. Container width: `container mx-auto` → `max-w-[1400px] mx-auto px-4 md:px-6`
+//    (Tailwind v4 mein `container` koi max-width set nahi karta — width mismatch bug fix)
+// 3. Connector line positioning fix: `left-1/4 right-1/4` → proper grid-based alignment
+//    (3-column grid mein columns ke centers 16.67% aur 83.33% par hote hain)
+// 4. Icon circles ka size badhaya (w-16→w-20) for better visual hierarchy
+// 5. Step number badge positioning refined
+// 6. Mobile: vertical stack, no connector line (cleaner on small screens)
+
 const steps = [
   {
-    icon: '🔍',
+    icon: Search,
     title: 'Service Chuniye',
     description: '100+ services mein se apni zaroorat ki service choose karo',
-    step: '01',
   },
   {
-    icon: '📅',
+    icon: CalendarDays,
     title: 'Book Kariye',
     description: 'Apna preferred date aur time slot select karo',
-    step: '02',
   },
   {
-    icon: '🏠',
+    icon: Home,
     title: 'Expert Aayega',
     description: 'Verified professional aapke ghar aayega aur kaam karega',
-    step: '03',
   },
 ]
 
 export default function HowItWorks() {
   return (
-    <section className="py-12 bg-muted/50">
-      <div className="container mx-auto px-4">
+    <section className="py-12 md:py-16 bg-muted/40">
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6">
         {/* Heading */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-10 md:mb-12">
           <h2 className="text-2xl md:text-3xl font-bold text-foreground">
             Kaise Kaam Karta Hai?
           </h2>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-2 text-sm md:text-base">
             3 simple steps mein booking complete karo
           </p>
         </div>
 
-        {/* Steps */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-          {/* Connector Line (Desktop) */}
-          <div className="hidden md:block absolute top-8 left-1/4 right-1/4 h-0.5 bg-primary/20" />
+        {/* Steps Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6 relative">
+          {/* Connector Line (Desktop only) — properly aligned to circle centers */}
+          <div className="hidden md:block absolute top-10 left-[16.67%] right-[16.67%] h-px bg-primary/20" />
 
-          {steps.map((step, index) => (
-            <div
-              key={step.step}
-              className="relative flex flex-col items-center text-center"
-            >
-              {/* Step Number */}
-              <div className="relative mb-4">
-                <div className="w-16 h-16 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center text-3xl">
-                  {step.icon}
+          {steps.map((step, index) => {
+            const Icon = step.icon
+            return (
+              <div
+                key={step.title}
+                className="relative flex flex-col items-center text-center"
+              >
+                {/* Icon Circle + Step Badge */}
+                <div className="relative mb-5">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center">
+                    <Icon className="h-8 w-8 text-primary" strokeWidth={1.75} />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                    {index + 1}
+                  </span>
                 </div>
-                <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
-                  {index + 1}
-                </span>
-              </div>
 
-              <h3 className="font-bold text-lg text-foreground mb-2">
-                {step.title}
-              </h3>
-              <p className="text-muted-foreground text-sm leading-relaxed max-w-48">
-                {step.description}
-              </p>
-            </div>
-          ))}
+                {/* Title */}
+                <h3 className="font-semibold text-lg text-foreground mb-2">
+                  {step.title}
+                </h3>
+
+                {/* Description */}
+                <p className="text-muted-foreground text-sm leading-relaxed max-w-56">
+                  {step.description}
+                </p>
+              </div>
+            )
+          })}
         </div>
       </div>
     </section>

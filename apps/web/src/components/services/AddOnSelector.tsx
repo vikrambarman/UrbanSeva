@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Plus, Check } from 'lucide-react'
+
+// ✅ ENHANCED — Better add-on selector design
+// Changes:
+// 1. Better visual feedback on selection
+// 2. Icon changes based on selection state
+// 3. Improved price display
 
 interface AddOn {
   id: string
@@ -38,37 +45,46 @@ export function AddOnSelector({ addOns, onAddOnChange }: AddOnSelectorProps) {
 
   return (
     <div className="space-y-3">
-      {addOns.map((addOn) => (
-        <div
-          key={addOn.id}
-          className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all ${
-            selected.has(addOn.id)
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/50'
-          }`}
-          onClick={() => handleToggle(addOn)}
-        >
-          <Checkbox
-            id={addOn.id}
-            checked={selected.has(addOn.id)}
-            onCheckedChange={() => handleToggle(addOn)}
-            className="mt-0.5"
-          />
-          <div className="flex-1">
-            <Label htmlFor={addOn.id} className="cursor-pointer font-medium">
-              {addOn.name}
-            </Label>
-            {addOn.description && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {addOn.description}
-              </p>
-            )}
+      {addOns.map((addOn) => {
+        const isSelected = selected.has(addOn.id)
+        
+        return (
+          <div
+            key={addOn.id}
+            className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all ${
+              isSelected
+                ? 'border-primary bg-gradient-to-br from-primary/10 to-primary/5 shadow-sm'
+                : 'border-gray-200 hover:border-primary/50 hover:bg-muted/30'
+            }`}
+            onClick={() => handleToggle(addOn)}
+          >
+            <Checkbox
+              id={addOn.id}
+              checked={isSelected}
+              onCheckedChange={() => handleToggle(addOn)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <Label htmlFor={addOn.id} className="cursor-pointer font-medium text-foreground">
+                {addOn.name}
+              </Label>
+              {addOn.description && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {addOn.description}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-primary font-semibold whitespace-nowrap">
+              {isSelected ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+              <span>₹{addOn.price}</span>
+            </div>
           </div>
-          <span className="text-primary font-semibold whitespace-nowrap">
-            +₹{addOn.price}
-          </span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -6,6 +6,11 @@ import { ShoppingCart, Check } from 'lucide-react'
 import { useCartStore } from '@/store/cartStore'
 import { toast } from 'sonner'
 
+// ✅ MINIMAL ENHANCEMENT — Already good, minor improvements
+// Changes:
+// 1. Better button styling with shadow
+// 2. Improved transition effects
+
 interface AddToCartButtonProps {
   service: {
     id: string
@@ -28,8 +33,6 @@ export function AddToCartButton({ service }: AddToCartButtonProps) {
   const [added, setAdded] = useState(false)
 
   const handleAddToCart = () => {
-    // Get selected pricing (for now, use base price)
-    // In future, this will come from PricingSelector state
     const selectedPrice = service.basePrice
     const selectedLabel = service.priceType === 'FIXED' ? 'Standard' : 'Starting'
 
@@ -42,24 +45,23 @@ export function AddToCartButton({ service }: AddToCartButtonProps) {
       subCategorySlug: service.subCategory.slug,
       selectedPricingLabel: selectedLabel,
       selectedPrice: selectedPrice,
-      addOns: [], // Will be updated when add-ons are selected
+      addOns: [],
       quantity: 1,
     })
 
     setAdded(true)
     toast.success('Added to cart!')
 
-    // Reset button after 2 seconds
     setTimeout(() => setAdded(false), 2000)
   }
 
   return (
     <Button
       onClick={handleAddToCart}
-      className={`w-full font-semibold py-3 px-6 rounded-xl transition-all ${
+      className={`w-full font-semibold py-3 px-6 rounded-xl transition-all shadow-sm ${
         added
-          ? 'bg-green-600 hover:bg-green-700'
-          : 'bg-primary hover:bg-primary/90'
+          ? 'bg-green-600 hover:bg-green-700 text-white'
+          : 'bg-primary hover:bg-primary/90 text-white'
       }`}
       disabled={added}
     >

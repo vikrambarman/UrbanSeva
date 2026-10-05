@@ -1,24 +1,26 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Star, Clock, Users } from 'lucide-react'
+import { Star, Clock, Users, Flame, ArrowRight, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ServiceImageWithFallback } from './ServiceImageWithFallback'
 import Link from 'next/link'
 
-interface ServiceInclusion {
+// ✅ FIX: Interfaces export kiye — taaki doosre components reuse kar sakein
+// Pehle ye locally defined the, jisse duplication hota tha aur type mismatch errors aate the
+export interface ServiceInclusion {
   id: string
   text: string
 }
 
-interface ServicePricing {
+export interface ServicePricing {
   id: string
   label: string
   price: number
 }
 
-interface Service {
+export interface Service {
   id: string
   name: string
   slug: string
@@ -35,7 +37,7 @@ interface Service {
   pricingTiers: ServicePricing[]
 }
 
-interface ServiceCardProps {
+export interface ServiceCardProps {
   service: Service
   variant?: 'row' | 'grid'
   categorySlug: string
@@ -77,8 +79,9 @@ export function ServiceCard({ service, variant = 'row', categorySlug, subCategor
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             {service.isTrending && (
-              <Badge className="absolute top-3 right-3 bg-primary">
-                🔥 Trending
+              <Badge className="absolute top-3 right-3 bg-primary text-white flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5" />
+                <span>Trending</span>
               </Badge>
             )}
           </div>
@@ -122,7 +125,7 @@ export function ServiceCard({ service, variant = 'row', categorySlug, subCategor
       <Link href={serviceUrl}>
         <div className="flex flex-col sm:flex-row">
           {/* Image */}
-          <div className="relative sm:w-64 h-48 sm:h-auto overflow-hidden flex-shrink-0">
+          <div className="relative sm:w-64 h-48 sm:h-64 overflow-hidden flex-shrink-0">
             <ServiceImageWithFallback
               src={service.image}
               alt={service.name}
@@ -130,8 +133,9 @@ export function ServiceCard({ service, variant = 'row', categorySlug, subCategor
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             {service.isTrending && (
-              <Badge className="absolute top-3 left-3 bg-primary">
-                🔥 Trending
+              <Badge className="absolute top-3 left-3 bg-primary text-white flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5" />
+                <span>Trending</span>
               </Badge>
             )}
           </div>
@@ -172,8 +176,9 @@ export function ServiceCard({ service, variant = 'row', categorySlug, subCategor
               {service.inclusions.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {service.inclusions.slice(0, 3).map((inc) => (
-                    <span key={inc.id} className="text-xs bg-muted px-2 py-1 rounded-full">
-                      ✓ {inc.text}
+                    <span key={inc.id} className="text-xs bg-muted px-2 py-1 rounded-full flex items-center gap-1">
+                      <Check className="w-3 h-3 text-primary" />
+                      <span>{inc.text}</span>
                     </span>
                   ))}
                   {service.inclusions.length > 3 && (
@@ -190,8 +195,9 @@ export function ServiceCard({ service, variant = 'row', categorySlug, subCategor
               <div>
                 <span className="text-2xl font-bold text-primary">{getPriceDisplay()}</span>
               </div>
-              <Button size="lg" className="bg-primary hover:bg-primary/90">
-                Book Now →
+              <Button size="lg" className="bg-primary hover:bg-primary/90 flex items-center gap-2">
+                <span>Book Now</span>
+                <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
           </div>

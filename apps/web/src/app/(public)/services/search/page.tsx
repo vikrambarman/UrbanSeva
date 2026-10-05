@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { ServiceCard } from '@/components/services/ServiceCard'
 import { db } from '@/lib/db'
 import { Search } from 'lucide-react'
@@ -40,14 +41,12 @@ export default async function SearchPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-6 md:py-8">
-        {/* Search Header */}
+      {/* ✅ FIXED: container mx-auto → max-w-[1400px] */}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 md:py-8">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Search className="w-6 h-6 text-muted-foreground" />
-            <h1 className="text-2xl md:text-3xl font-bold">
-              Search Results
-            </h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Search Results</h1>
           </div>
           {query && (
             <p className="text-muted-foreground">
@@ -57,10 +56,10 @@ export default async function SearchPage({ searchParams }: Props) {
           )}
         </div>
 
-        {/* Results */}
         {services.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-6xl mb-4">🔍</div>
+            {/* ✅ FIXED: emoji 🔍 → Lucide Search icon */}
+            <Search className="h-14 w-14 text-muted-foreground/40 mx-auto mb-4" strokeWidth={1.5} />
             <h2 className="text-xl font-semibold mb-2">
               {query ? 'Koi results nahi mile' : 'Search karein'}
             </h2>
@@ -69,12 +68,12 @@ export default async function SearchPage({ searchParams }: Props) {
                 ? 'Kripya doosre keywords se search karein ya categories browse karein.'
                 : 'Apni zaroorat ki service search karein.'}
             </p>
-            <a
+            <Link
               href="/services"
               className="inline-block mt-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-colors"
             >
               Browse All Services
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="space-y-4">

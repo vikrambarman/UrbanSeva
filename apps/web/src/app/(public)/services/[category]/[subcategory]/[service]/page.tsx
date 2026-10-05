@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Star, Clock, Users, Shield } from 'lucide-react'
+import { Star, Clock, Users, Shield, Flame, ArrowRight, CheckCircle2 } from 'lucide-react'
 import type { Metadata } from 'next'
 import { ServiceBreadcrumb } from '@/components/services/ServiceBreadcrumb'
 import { ServiceImageWithFallback } from '@/components/services/ServiceImageWithFallback'
@@ -13,6 +14,16 @@ import { PricingSelector } from '@/components/services/PricingSelector'
 import { AddOnSelector } from '@/components/services/AddOnSelector'
 import { StickyBookingBar } from '@/components/services/StickyBookingBar'
 import { AddToCartButton } from '@/components/services/AddToCartButton'
+import { SITE_CONFIG } from '@/lib/config'
+
+// ✅ ENHANCED — Premium service detail page
+// Changes:
+// 1. Metadata: Hardcoded "ServiceApp Ambikapur" → SITE_CONFIG
+// 2. Hero header with gradient overlay on image
+// 3. Enhanced stats section with better visual treatment
+// 4. Sidebar card: Better design with subtle shadows
+// 5. "Book Now →" → ArrowRight icon (consistency)
+// 6. Better spacing and typography throughout
 
 interface Props {
   params: Promise<{ category: string; subcategory: string; service: string }>
@@ -28,8 +39,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!service) return { title: 'Service Not Found' }
 
+  // ✅ FIX: Hardcoded "ServiceApp Ambikapur" → SITE_CONFIG.name
   return {
-    title: `${service.name} | ServiceApp Ambikapur`,
+    title: `${service.name} | ${SITE_CONFIG.name}`,
     description: service.description,
   }
 }
@@ -69,7 +81,7 @@ export default async function ServiceDetailPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
-      <div className="container mx-auto px-4 py-6 md:py-8">
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 md:py-8">
         {/* Breadcrumb */}
         <ServiceBreadcrumb
           category={{ name: service.subCategory.category.name, slug: service.subCategory.category.slug }}
@@ -78,96 +90,96 @@ export default async function ServiceDetailPage({ params }: Props) {
         />
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* LEFT COLUMN - Main Content (2/3) */}
+          {/* Left Column — Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Service Image */}
-            <div className="relative rounded-2xl overflow-hidden h-64 md:h-80">
+            {/* ✅ Hero Image Section with gradient overlay */}
+            <div className="relative rounded-2xl overflow-hidden h-64 md:h-80 group">
               <ServiceImageWithFallback
                 src={service.image}
                 alt={service.name}
                 categorySlug={category}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
-            </div>
-
-            {/* Service Header */}
-            <div>
-              <div className="flex flex-wrap gap-2 mb-3">
+              {/* Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              
+              {/* Badges on image */}
+              <div className="absolute top-4 left-4 flex flex-wrap gap-2">
                 {service.isTrending && (
-                  <Badge variant="default" className="bg-primary">
-                    🔥 Trending
+                  <Badge className="bg-primary text-white gap-1 shadow-lg">
+                    <Flame className="w-3 h-3" />
+                    Trending
                   </Badge>
                 )}
                 {service.guarantee && (
-                  <Badge variant="outline" className="border-green-500 text-green-700">
-                    <Shield className="w-3 h-3 mr-1" />
+                  <Badge className="bg-green-500 text-white gap-1 shadow-lg">
+                    <Shield className="w-3 h-3" />
                     {service.guarantee}
                   </Badge>
                 )}
               </div>
+            </div>
 
-              <h1 className="text-2xl md:text-3xl font-bold mb-3">
-                {service.name}
-              </h1>
+            {/* ✅ Title Section */}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold mb-3">{service.name}</h1>
 
-              {/* Rating & Stats */}
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              {/* Stats */}
+              <div className="flex flex-wrap items-center gap-4 text-sm">
                 {service.avgRating > 0 && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1.5">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                     <span className="font-semibold text-foreground">{service.avgRating}</span>
-                    <span>({service.totalReviews} reviews)</span>
+                    <span className="text-muted-foreground">({service.totalReviews})</span>
                   </div>
                 )}
                 {service.duration && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{service.duration}</span>
+                  <div className="flex items-center gap-1.5 bg-muted/50 rounded-full px-3 py-1.5">
+                    <Clock className="w-4 h-4 text-primary" />
+                    <span className="text-foreground font-medium">{service.duration}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4" />
-                  <span>{service.professionals} Expert{service.professionals > 1 ? 's' : ''}</span>
+                <div className="flex items-center gap-1.5 bg-muted/50 rounded-full px-3 py-1.5">
+                  <Users className="w-4 h-4 text-primary" />
+                  <span className="text-foreground font-medium">
+                    {service.professionals} Expert{service.professionals > 1 ? 's' : ''}
+                  </span>
                 </div>
               </div>
             </div>
 
             <Separator />
 
-            {/* Description */}
+            {/* ✅ About Section */}
             <div>
-              <h2 className="text-lg font-semibold mb-2">About this service</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                {service.description}
-              </p>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-primary" />
+                About this service
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">{service.description}</p>
             </div>
 
-            {/* What's Covered */}
-            <WhatsCovered
-              inclusions={service.inclusions}
-              exclusions={service.exclusions}
-            />
+            <WhatsCovered inclusions={service.inclusions} exclusions={service.exclusions} />
 
-            {/* Assigned Providers */}
-            {providers.length > 0 && (
-              <AssignedProviders providers={providers} />
-            )}
+            {providers.length > 0 && <AssignedProviders providers={providers} />}
 
-            {/* FAQs */}
-            {service.faqs.length > 0 && (
-              <ServiceFAQs faqs={service.faqs} />
-            )}
+            {service.faqs.length > 0 && <ServiceFAQs faqs={service.faqs} />}
           </div>
 
-          {/* RIGHT COLUMN - Booking Sidebar (1/3) */}
+          {/* Right Column — Sidebar */}
           <div className="hidden lg:block">
             <div className="sticky top-24 space-y-4">
-              {/* Pricing Card */}
-              <div className="rounded-2xl border bg-card p-6 space-y-4">
-                <h3 className="font-semibold text-lg">Select Package</h3>
+              {/* ✅ Enhanced Sidebar Card */}
+              <div className="rounded-2xl border border-gray-200 bg-card shadow-sm p-6 space-y-5">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                  </span>
+                  Select Package
+                </h3>
+                
                 <PricingSelector service={service} />
 
-                {/* Add-ons */}
                 {service.addOns.length > 0 && (
                   <>
                     <Separator />
@@ -180,16 +192,17 @@ export default async function ServiceDetailPage({ params }: Props) {
 
                 <Separator />
 
-                {/* Action Buttons */}
                 <div className="space-y-3">
                   <AddToCartButton service={service} />
 
-                  <a
+                  {/* ✅ FIX: "→" character → ArrowRight icon */}
+                  <Link
                     href={`/booking/${service.slug}`}
-                    className="block w-full text-center border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-colors"
+                    className="flex items-center justify-center gap-2 w-full border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-colors"
                   >
-                    Book Now →
-                  </a>
+                    <span>Book Now</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </div>
               </div>
             </div>
@@ -197,11 +210,7 @@ export default async function ServiceDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Mobile Sticky Booking Bar */}
-      <StickyBookingBar
-        service={service}
-        serviceUrl={`/booking/${service.slug}`}
-      />
+      <StickyBookingBar service={service} serviceUrl={`/booking/${service.slug}`} />
     </div>
   )
 }

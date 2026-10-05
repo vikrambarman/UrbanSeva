@@ -1,19 +1,11 @@
 import { create } from 'zustand'
+import { CategoryWithSubs } from '@/types'
 
-interface CategoryWithSubs {
-  id: string
-  name: string
-  slug: string
-  icon: string | null
-  subCategories: {
-    id: string
-    name: string
-    slug: string
-    image: string | null
-    description: string | null
-  }[]
-}
-
+// ✅ FIXED: Pehle yahan ek local duplicate 'CategoryWithSubs' interface
+// define tha jo '@/types' wale se out-of-sync ho sakta tha (jaise 'image'
+// field missing thi). Isi wajah se CategoryGrid.tsx mein '{selectedCategory
+// as any}' likhna pada tha — type-safety bypass. Ab single source-of-truth
+// se import ho raha hai, 'as any' ki zaroorat khatam.
 interface UIState {
   isCategoryModalOpen: boolean
   selectedCategory: CategoryWithSubs | null

@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import { useState } from 'react'
+import { getCategoryIcon } from '@/lib/category-icons'
+import { cn } from '@/lib/utils'
 
 const CATEGORY_COLORS: Record<string, string> = {
   'home-cleaning': 'from-blue-400 to-blue-600',
@@ -22,25 +24,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   'packers-movers': 'from-blue-700 to-blue-900',
 }
 
-const CATEGORY_EMOJIS: Record<string, string> = {
-  'home-cleaning': '🧹',
-  'electrical': '⚡',
-  'plumbing': '🔧',
-  'ac-appliance': '❄️',
-  'painting': '🎨',
-  'pest-control': '🐛',
-  'beauty-wellness': '💆',
-  'carpentry': '🪚',
-  'home-improvement': '🏠',
-  'vehicle-services': '🚗',
-  'property-services': '🏢',
-  'education-tuition': '📚',
-  'healthcare': '🏥',
-  'pet-care': '🐾',
-  'events-occasions': '🎉',
-  'packers-movers': '📦',
-}
-
 interface ServiceImageWithFallbackProps {
   src: string | null
   alt: string
@@ -57,18 +40,26 @@ export function ServiceImageWithFallback({
   const [imgError, setImgError] = useState(false)
 
   const gradient = CATEGORY_COLORS[categorySlug] || 'from-gray-400 to-gray-600'
-  const emoji = CATEGORY_EMOJIS[categorySlug] || '🏠'
+  const Icon = getCategoryIcon(categorySlug)
 
-  // Fallback: Gradient with emoji
   if (!src || imgError) {
     return (
-      <div className={`bg-gradient-to-br ${gradient} flex items-center justify-center ${className}`}>
-        <span className="text-6xl opacity-50">{emoji}</span>
+      // ✅ FIXED: pehle ye div 'className' (jo <Image> ke liye tha, jaise
+      // 'object-cover') seedhe le raha tha aur kabhi 'absolute inset-0'
+      // nahi tha — isliye parent ke aspect-ratio box ko poora fill nahi
+      // karta tha, sirf icon jitni height leta tha. Ab explicitly poora
+      // box fill karta hai, bilkul 'Image fill' jaisa.
+      <div
+        className={cn(
+          'absolute inset-0 w-full h-full bg-gradient-to-br flex items-center justify-center',
+          gradient
+        )}
+      >
+        <Icon className="h-10 w-10 text-white/70" strokeWidth={1.5} />
       </div>
     )
   }
 
-  // Success: Next.js Image
   return (
     <Image
       src={src}
