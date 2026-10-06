@@ -1,4 +1,6 @@
 // components/admin/Sidebar.tsx
+// CHANGE: "Staff" navigation item add kiya Operations section mein
+// WHY: Admin ko calling team manage karne ka option chahiye sidebar se
 
 "use client"
 
@@ -8,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { 
     LayoutDashboard, Users, Briefcase, UserPlus, Wrench, Calendar, 
     IndianRupee, Wallet, RotateCcw, Image, HelpCircle, Settings, X,
-    FileText, TrendingUp
+    FileText, TrendingUp, Headphones
 } from "lucide-react"
 
 interface SidebarProps {
@@ -29,7 +31,7 @@ const navigation = [
         items: [
             { href: "/admin/users", label: "All Users", icon: Users },
             { href: "/admin/providers", label: "Providers", icon: Briefcase },
-            { href: "/admin/provider-inquiries", label: "Provider Applications", icon: UserPlus }, // ✅ NEW
+            { href: "/admin/provider-inquiries", label: "Provider Applications", icon: UserPlus },
         ]
     },
     {
@@ -37,6 +39,8 @@ const navigation = [
         items: [
             { href: "/admin/services", label: "Services", icon: Wrench },
             { href: "/admin/bookings", label: "Bookings", icon: Calendar },
+            // CHANGE: NEW — Calling Team / Staff management
+            { href: "/admin/staff", label: "Calling Team", icon: Headphones },
         ]
     },
     {
@@ -103,7 +107,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                                         <Link
                                             key={item.href}
                                             href={item.href}
-                                            onClick={onClose} // Close sidebar on mobile when link clicked
+                                            onClick={onClose}
                                             className={cn(
                                                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                                                 isActive 

@@ -1,16 +1,24 @@
+// store/authStore.ts
+// CHANGE: User interface mein CALLING_TEAM role add kiya
+// CHANGE: categories field add kiya (calling team ke assigned categories ke liye)
+// WHY: Ops portal login ke baad user ke paas categories info honi chahiye
+//       taaki sirf apni categories ki bookings dikha sake
+
 'use client'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+// CHANGE: CALLING_TEAM role add kiya + categories field add kiya
 interface User {
   id: string
   phone: string
   name: string | null
   email: string | null
-  role: 'CUSTOMER' | 'PROVIDER' | 'ADMIN' | 'SUPER_ADMIN'
+  role: 'CUSTOMER' | 'PROVIDER' | 'ADMIN' | 'SUPER_ADMIN' | 'CALLING_TEAM'
   avatar: string | null
   isVerified: boolean
+  categories?: { id: string; name: string; slug: string }[] // Calling team ke liye
 }
 
 interface AuthState {

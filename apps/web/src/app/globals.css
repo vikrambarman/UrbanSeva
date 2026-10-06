@@ -50,11 +50,6 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* ===== BRAND CUSTOM COLORS =====
-     NOTE: Variable/class naam legacy hai ("orange"), lekin value ab
-     Teal hai. Admin/Provider panel review ke waqt naam bhi rename karenge
-     (gradient-primary etc.) — abhi sirf value change kiya hai taaki
-     unreviewed files (admin/provider) mein style na toote. */
   --color-brand-orange: #0D9488;
   --color-brand-orange-light: #14B8A6;
   --color-brand-orange-dark: #0F766E;
@@ -89,12 +84,10 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
 
-  /* PRIMARY = TEAL #0D9488 */
   --primary: oklch(0.6 0.118 184.704);
   --primary-foreground: oklch(1 0 0);
   --primary-dark: oklch(0.5 0.1 184.704); 
 
-  /* SECONDARY = DEEP BLUE #1E3A5F (unchanged) */
   --secondary: oklch(0.279 0.082 255.716);
   --secondary-foreground: oklch(1 0 0);
 
@@ -106,7 +99,6 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
 
-  /* RING = TEAL */
   --ring: oklch(0.6 0.118 184.704);
 
   --chart-1: oklch(0.6 0.118 184.704);
@@ -135,12 +127,10 @@
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
 
-  /* PRIMARY = TEAL (same in dark) */
   --primary: oklch(0.6 0.118 184.704);
   --primary-foreground: oklch(1 0 0);
   --primary-dark: oklch(0.45 0.09 184.704); 
 
-  /* SECONDARY = LIGHTER BLUE in dark (unchanged) */
   --secondary: oklch(0.379 0.082 255.716);
   --secondary-foreground: oklch(0.985 0 0);
 
@@ -193,7 +183,6 @@
     @apply bg-muted;
   }
 
-  /* ✅ Scrollbar colors updated: orange → teal */
   ::-webkit-scrollbar-thumb {
     background: #0D9488;
     border-radius: 9999px;
@@ -204,10 +193,31 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD LAYOUTS — Body scroll fix
+   ═══════════════════════════════════════════════════════════════════
+   KYA: Admin, Ops, Provider, Customer dashboard layouts ke liye
+        body/html ko constrain kiya — sirf inner content scroll karega
+   KYUN: Pehle body naturally grow karta tha content ke saath,
+         aur h-screen/h-dvh layouts usse chhote rehte the.
+         Isliye pura page scroll ho raha tha, sidebar bhi scroll hota tha.
+   NOTE: Public pages (homepage, services) isse affect nahi honge
+         kyunki wo apna scroll independently manage karte hain.
+*/
+html:has(body[data-layout="dashboard"]),
+html:has(body[data-layout="ops"]) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body[data-layout="dashboard"],
+body[data-layout="ops"] {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 /* ===== UTILITY CLASSES ===== */
 @layer utilities {
-  /* Legacy name "gradient-orange" — value ab teal hai.
-     Rename planned during admin/provider panel cleanup pass. */
   .gradient-orange {
     background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%);
   }
@@ -220,7 +230,6 @@
     @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
   }
 
-  /* Legacy name "text-gradient-orange" — value ab teal hai. */
   .text-gradient-orange {
     background: linear-gradient(135deg, #0D9488, #0F766E);
     -webkit-background-clip: text;
@@ -251,4 +260,24 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD LAYOUTS — Body scroll fix
+   ═══════════════════════════════════════════════════════════════════
+   KYA: Admin, Ops layouts ke liye body/html ko constrain kiya
+   KYUN: Pehle body naturally grow karta tha, h-dvh layouts chhote rehte the
+   NOTE: Sirf tab apply hoga jab body pe data-layout attribute ho
+*/
+html:has(body[data-layout="dashboard"]),
+html:has(body[data-layout="ops"]) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body[data-layout="dashboard"],
+body[data-layout="ops"] {
+  height: 100dvh;
+  overflow: hidden;
 }

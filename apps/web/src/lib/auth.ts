@@ -1,4 +1,7 @@
 // lib/auth.ts
+// CHANGE: JWTPayload mein CALLING_TEAM role add kiya
+// CHANGE: getCallingTeamUser() helper function add kiya — Ops portal ke liye
+// WHY: Calling team members ka alag auth flow hai, unka role verify karne ke liye
 
 import jwt, { SignOptions } from 'jsonwebtoken'
 import { redis } from './redis'
@@ -8,9 +11,10 @@ import { db } from './db'
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
 
+// CHANGE: CALLING_TEAM role add kiya interface mein
 export interface JWTPayload {
     userId: string
-    role: "CUSTOMER" | "PROVIDER" | "ADMIN" | "SUPER_ADMIN"
+    role: "CUSTOMER" | "PROVIDER" | "ADMIN" | "SUPER_ADMIN" | "CALLING_TEAM"
     phone: string
     providerId?: string
 }
@@ -113,6 +117,59 @@ export async function getProviderUser(request: NextRequest): Promise<{
         console.error('Get Provider User Error:', error)
         return null
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NEW: Calling Team auth helper
+// ═══════════════════════════════════════════════════════════════════
+// KYA: Ops portal ke liye auth helper — sirf CALLING_TEAM role allow karega
+// KYUN: Calling team members ka alag portal hai, unka access restrict karna hai
+//       sirf booking management tak. Services, users, finance access nahi hoga.
+export async function getCallingTeamUser(request: NextRequest): Promise<JWTPayload | null> {
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null
+
+    const token = authHeader.substring(7)
+    const payload = verifyToken(token)
+    
+    if (!payload) return null
+    
+    // CALLING_TEAM, ADMIN, SUPER_ADMIN — teeno allow hain
+    // Admin bhi ops portal access kar sake ( oversight ke liye)
+    if (payload.role !== 'CALLING_TEAM' && payload.role !== 'ADMIN' && payload.role !== 'SUPER_ADMIN') {
+        return null
+    }
+
+    // Verify user is active
+    const user = await db.user.findUnique({
+        where: { id: payload.userId }
+    })
+
+    if (!user || !user.isActive) return null
+
+    return payload
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NEW: Get calling team member's assigned categories
+// ═══════════════════════════════════════════════════════════════════
+// KYA: Staff member ko kaunsi categories assign hain — wo fetch karta hai
+// KYUN: Dashboard aur bookings list sirf assigned categories ki dikhani hain
+export async function getStaffCategories(userId: string) {
+    const staffCategories = await db.staffCategory.findMany({
+        where: { userId },
+        include: {
+            category: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    image: true,
+                }
+            }
+        }
+    })
+    return staffCategories.map(sc => sc.category)
 }
 
 // Redis session functions

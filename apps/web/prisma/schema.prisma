@@ -17,6 +17,7 @@ enum Role {
   PROVIDER
   ADMIN
   SUPER_ADMIN
+  CALLING_TEAM    // ← NEW: Ops portal ke liye calling team members
 }
 
 enum LoyaltyTier {
@@ -189,6 +190,19 @@ model User {
   provider      Provider?
   properties    Property[]
   subscriptions UserSubscription[]
+  
+  // ═══════════════════════════════
+  // NEW RELATIONS — Calling Team Portal
+  // ═══════════════════════════════
+  
+  // Staff member ki assigned categories (agar role = CALLING_TEAM)
+  staffCategories      StaffCategory[]        @relation("StaffCategories")
+  
+  // Admin ne kaunsi categories assign ki (tracking)
+  assignedCategories   StaffCategory[]        @relation("StaffCategoryAssignedBy")
+  
+  // Staff ne kaunse booking actions liye (activity log)
+  assignmentLogs       BookingAssignmentLog[] @relation("AssignmentLogs")
 }
 
 model OTPVerification {
@@ -251,6 +265,12 @@ model Category {
   createdAt     DateTime      @default(now())
 
   subCategories SubCategory[]
+  
+  // ═══════════════════════════════
+  // NEW RELATION — Calling Team Portal
+  // ═══════════════════════════════
+  // Kis staff member ko ye category assign hai
+  staffCategories StaffCategory[]
 }
 
 model SubCategory {
@@ -476,6 +496,12 @@ model Booking {
   review        Review?
   payment       Payment?
   statusHistory BookingStatusHistory[]
+  
+  // ═══════════════════════════════
+  // NEW RELATION — Calling Team Portal
+  // ═══════════════════════════════
+  // Is booking pe kaunse staff ne kya actions liye
+  assignmentLogs BookingAssignmentLog[]
 
   @@index([userId])
   @@index([providerId])
@@ -833,4 +859,57 @@ model ProviderInquiry {
   notes      String?  @db.Text // Admin notes
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CALLING TEAM PORTAL — NEW MODELS
+// ═══════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────
+// StaffCategory: Maps calling team members to service categories
+// ─────────────────────────────────────────────────────────────────
+// KYA: Staff member ko kaunsi categories manage karne ka access hai
+// KYUN: Category-wise specialization — staff sirf apni assigned categories
+//       ki bookings dekhega aur manage karega. Admin se assign hoga.
+model StaffCategory {
+  id         String   @id @default(cuid())
+  userId     String   // Calling team member ka ID
+  categoryId String   // Category ID jo assign hai
+  assignedBy String   // Admin ne assign kiya (tracking)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user           User     @relation("StaffCategories", fields: [userId], references: [id], onDelete: Cascade)
+  category       Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  assignedByUser User     @relation("StaffCategoryAssignedBy", fields: [assignedBy], references: [id])
+
+  @@unique([userId, categoryId]) // Ek staff ko ek category sirf ek baar
+  @@index([userId])
+  @@index([categoryId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BookingAssignmentLog: Activity trail for booking actions
+// ─────────────────────────────────────────────────────────────────
+// KYA: Kaunse staff/admin ne booking pe kya action liya, kab liya
+// KYUN: Production mein accountability zaroori hai — dispute resolution,
+//       performance review, aur audit trail ke liye.
+//       Example: "Rahul ne 12:30 pe provider assign kiya", "Priya ne reschedule kiya"
+model BookingAssignmentLog {
+  id        String   @id @default(cuid())
+  bookingId String   // Kis booking pe action hua
+  actionBy  String   // Kis staff/admin ne kiya
+  action    String   // PROVIDER_ASSIGNED | RESCHEDULED | CANCELLED | NOTE_ADDED
+  fromValue String?  // Old value (e.g., purana provider name / purana date-time)
+  toValue   String?  // New value (e.g., naya provider name / naya date-time)
+  notes     String?  // Optional notes (e.g., "Customer ne bola 5 baje aayein")
+  createdAt DateTime @default(now())
+
+  // Relations
+  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  assignedBy User   @relation("AssignmentLogs", fields: [actionBy], references: [id])
+
+  @@index([bookingId])
+  @@index([actionBy])
+  @@index([createdAt])
 }
