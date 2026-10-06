@@ -1,8 +1,10 @@
-// apps/web/src/app/ops/bookings/page.tsx
-// CHANGE: apiFetch calls mein cache: 'no-store' add kiya
-// CHANGE: Redundant auth check useEffect hata diya (middleware handle karega)
-// WHY: Admin side se edit karne par Ops panel mein data update nahi ho raha tha
-//      kyunki Next.js fetch cache ho jata tha. Ab har request fresh fetch hogi.
+/**
+ * WHAT: OPS Bookings page with production status flow
+ * WHY: 
+ * - Add new statuses (PAYMENT_RECEIVED, PENDING_CONFIRMATION, RESCHEDULE_PENDING)
+ * - Better status visualization with icons
+ * NOTE: Backward compatible with old statuses
+ */
 
 "use client"
 
@@ -22,7 +24,7 @@ import {
 import { 
     Search, Filter, Calendar, Phone, User, MapPin, 
     ChevronLeft, ChevronRight, Eye, Clock, CheckCircle2,
-    XCircle, Truck, Wrench, AlertCircle
+    XCircle, Truck, Wrench, AlertCircle, CreditCard, RefreshCw
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-client"
 import Link from "next/link"
@@ -67,15 +69,26 @@ interface Booking {
     } | null
 }
 
-// Status badge config
+// ═══════════════════════════════════════════════════════════════
+// UPDATED: Status badge config with NEW production statuses
+// ═══════════════════════════════════════════════════════════════
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+    // NEW Production Flow
+    PAYMENT_RECEIVED: { label: 'Payment Received', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: CreditCard },
+    PENDING_CONFIRMATION: { label: 'Awaiting Confirmation', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
+    RESCHEDULE_PENDING: { label: 'Reschedule Pending', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: RefreshCw },
+    
+    // Legacy statuses
     PENDING: { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
     CONFIRMED: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: CheckCircle2 },
     PROVIDER_ASSIGNED: { label: 'Assigned', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
-    PROVIDER_TRAVELLING: { label: 'Travelling', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
+    PROVIDER_TRAVELLING: { label: 'On The Way', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
     SERVICE_STARTED: { label: 'In Progress', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', icon: Wrench },
     SERVICE_COMPLETED: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
     CANCELLED: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+    CANCELLED_BY_CUSTOMER: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+    CANCELLED_BY_OPS: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+    CANCELLED_BY_PROVIDER: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
     REFUND_INITIATED: { label: 'Refund', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: AlertCircle },
     REFUNDED: { label: 'Refunded', color: 'bg-gray-100 text-gray-700 border-gray-200', icon: XCircle },
 }
@@ -96,9 +109,6 @@ export default function OpsBookingsPage() {
     const [totalPages, setTotalPages] = useState(1)
     const [total, setTotal] = useState(0)
 
-    // ═══════════════════════════════════════════════════════════════
-    // Fetch bookings
-    // ═══════════════════════════════════════════════════════════════
     const fetchBookings = useCallback(async () => {
         setLoading(true)
         try {
@@ -109,7 +119,6 @@ export default function OpsBookingsPage() {
             if (categoryFilter) params.set('categoryId', categoryFilter)
             if (search) params.set('search', search)
 
-            // CHANGE: cache: 'no-store' added to prevent Next.js caching
             const res = await apiFetch(`/api/ops/bookings?${params.toString()}`, {
                 cache: 'no-store',
                 credentials: 'include',
@@ -132,14 +141,12 @@ export default function OpsBookingsPage() {
         fetchBookings()
     }, [fetchBookings])
 
-    // Search debounce
     useEffect(() => {
         const timer = setTimeout(() => {
             setPage(1)
             fetchBookings()
         }, 500)
         return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search])
 
     const getStatusBadge = (status: string) => {
@@ -164,9 +171,7 @@ export default function OpsBookingsPage() {
 
     return (
         <div className="space-y-6">
-            {/* ═══════════════════════════════════════════════════════════════ */}
             {/* Header */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
             <div>
                 <h1 className="text-2xl font-bold">Bookings Management</h1>
                 <p className="text-muted-foreground mt-1">
@@ -174,9 +179,7 @@ export default function OpsBookingsPage() {
                 </p>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
             {/* Filters */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
             <Card>
                 <CardContent className="pt-6">
                     <div className="flex flex-col sm:flex-row gap-4">
@@ -191,18 +194,23 @@ export default function OpsBookingsPage() {
                             />
                         </div>
 
-                        {/* Status Filter */}
+                        {/* Status Filter - UPDATED with new statuses */}
                         <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(1) }}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectTrigger className="w-full sm:w-[200px]">
                                 <Filter className="h-4 w-4 mr-2" />
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">All Status</SelectItem>
+                                {/* NEW Production Flow */}
+                                <SelectItem value="PAYMENT_RECEIVED">Payment Received</SelectItem>
+                                <SelectItem value="PENDING_CONFIRMATION">Awaiting Confirmation</SelectItem>
+                                <SelectItem value="RESCHEDULE_PENDING">Reschedule Pending</SelectItem>
+                                {/* Legacy */}
                                 <SelectItem value="PENDING">Pending</SelectItem>
                                 <SelectItem value="CONFIRMED">Confirmed</SelectItem>
                                 <SelectItem value="PROVIDER_ASSIGNED">Assigned</SelectItem>
-                                <SelectItem value="PROVIDER_TRAVELLING">Travelling</SelectItem>
+                                <SelectItem value="PROVIDER_TRAVELLING">On The Way</SelectItem>
                                 <SelectItem value="SERVICE_STARTED">In Progress</SelectItem>
                                 <SelectItem value="SERVICE_COMPLETED">Completed</SelectItem>
                                 <SelectItem value="CANCELLED">Cancelled</SelectItem>
@@ -216,7 +224,6 @@ export default function OpsBookingsPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="">All Categories</SelectItem>
-                                {/* Categories will be loaded from stats API or hardcoded for now */}
                                 <SelectItem value="cleaning">Cleaning</SelectItem>
                                 <SelectItem value="plumbing">Plumbing</SelectItem>
                                 <SelectItem value="electrical">Electrical</SelectItem>
@@ -227,9 +234,7 @@ export default function OpsBookingsPage() {
                 </CardContent>
             </Card>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
             {/* Bookings Table */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">

@@ -1,3 +1,13 @@
+/**
+ * WHAT: Booking detail page with visual timeline
+ * WHY: 
+ * - Visual timeline for status tracking
+ * - Remove emojis, use Lucide icons only
+ * - Better provider section with contact options
+ * - Support new status flow
+ * NOTE: Backward compatible
+ */
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,9 +16,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Calendar, Clock, MapPin, User, Phone, ArrowLeft, Star, MessageCircle } from 'lucide-react'
+import { 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  User, 
+  Phone, 
+  ArrowLeft, 
+  Star, 
+  MessageCircle,
+  CheckCircle2,
+  Circle,
+  AlertCircle
+} from 'lucide-react'
 import Image from 'next/image'
 import { toast } from 'sonner'
+import { ServiceImageWithFallback } from '@/components/services/ServiceImageWithFallback'
 
 interface BookingDetail {
   id: string
@@ -22,6 +45,7 @@ interface BookingDetail {
   specialInstructions?: string
   razorpayPaymentId?: string
   paymentStatus: string
+  paymentMethod?: string
   createdAt: string
   service: {
     id: string
@@ -75,6 +99,7 @@ export default function BookingDetailPage() {
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/bookings/${params.id}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
       })
       const data = await response.json()
       if (data.success) {
@@ -93,15 +118,53 @@ export default function BookingDetailPage() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      CONFIRMED: 'bg-blue-100 text-blue-800',
-      PROVIDER_ASSIGNED: 'bg-purple-100 text-purple-800',
-      PROVIDER_TRAVELLING: 'bg-indigo-100 text-indigo-800',
-      SERVICE_STARTED: 'bg-orange-100 text-orange-800',
-      SERVICE_COMPLETED: 'bg-green-100 text-green-800',
-      CANCELLED: 'bg-red-100 text-red-800',
+      PAYMENT_RECEIVED: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      PENDING_CONFIRMATION: 'bg-blue-100 text-blue-800 border-blue-200',
+      RESCHEDULE_PENDING: 'bg-orange-100 text-orange-800 border-orange-200',
+      PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      CONFIRMED: 'bg-blue-100 text-blue-800 border-blue-200',
+      PROVIDER_ASSIGNED: 'bg-purple-100 text-purple-800 border-purple-200',
+      PROVIDER_TRAVELLING: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      SERVICE_STARTED: 'bg-orange-100 text-orange-800 border-orange-200',
+      SERVICE_COMPLETED: 'bg-green-100 text-green-800 border-green-200',
+      CANCELLED: 'bg-red-100 text-red-800 border-red-200',
+      CANCELLED_BY_CUSTOMER: 'bg-red-100 text-red-800 border-red-200',
+      CANCELLED_BY_OPS: 'bg-red-100 text-red-800 border-red-200',
+      CANCELLED_BY_PROVIDER: 'bg-red-100 text-red-800 border-red-200',
     }
-    return colors[status] || 'bg-gray-100 text-gray-800'
+    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
+  }
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      PAYMENT_RECEIVED: 'Payment Received',
+      PENDING_CONFIRMATION: 'Awaiting Confirmation',
+      RESCHEDULE_PENDING: 'Reschedule Pending',
+      PENDING: 'Pending',
+      CONFIRMED: 'Confirmed',
+      PROVIDER_ASSIGNED: 'Provider Assigned',
+      PROVIDER_TRAVELLING: 'Provider On Way',
+      SERVICE_STARTED: 'In Progress',
+      SERVICE_COMPLETED: 'Completed',
+      CANCELLED: 'Cancelled',
+      CANCELLED_BY_CUSTOMER: 'Cancelled',
+      CANCELLED_BY_OPS: 'Cancelled',
+      CANCELLED_BY_PROVIDER: 'Cancelled',
+    }
+    return labels[status] || status.replace(/_/g, ' ')
+  }
+
+  const getTimelineIcon = (status: string, isCurrent: boolean) => {
+    if (status.includes('CANCELLED')) {
+      return <AlertCircle className="w-4 h-4 text-red-600" />
+    }
+    if (status === 'SERVICE_COMPLETED') {
+      return <CheckCircle2 className="w-4 h-4 text-green-600" />
+    }
+    if (isCurrent) {
+      return <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
+    }
+    return <Circle className="w-3 h-3 text-muted-foreground" />
   }
 
   const handleCancelBooking = async () => {
@@ -159,7 +222,7 @@ export default function BookingDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-8">
         {/* Back Button */}
         <Button variant="ghost" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -174,18 +237,12 @@ export default function BookingDetailPage() {
               <CardContent className="p-6">
                 <div className="flex gap-4 mb-4">
                   <div className="relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
-                    {booking.service.image ? (
-                      <Image
-                        src={booking.service.image}
-                        alt={booking.service.name}
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-muted flex items-center justify-center">
-                        <span className="text-4xl">🔧</span>
-                      </div>
-                    )}
+                    <ServiceImageWithFallback
+                      src={booking.service.image}
+                      alt={booking.service.name}
+                      categorySlug={booking.service.subCategory.category.name.toLowerCase()}
+                      className="object-cover"
+                    />
                   </div>
                   <div className="flex-1">
                     <h1 className="text-2xl font-bold mb-1">{booking.service.name}</h1>
@@ -194,7 +251,7 @@ export default function BookingDetailPage() {
                     </p>
                     <div className="flex items-center gap-2">
                       <Badge className={getStatusColor(booking.status)}>
-                        {booking.status.replace('_', ' ')}
+                        {getStatusLabel(booking.status)}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
                         #{booking.bookingNumber}
@@ -214,7 +271,7 @@ export default function BookingDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Calendar className="w-5 h-5" />
+                    <Calendar className="w-5 h-5 text-primary" />
                     Schedule
                   </CardTitle>
                 </CardHeader>
@@ -237,7 +294,7 @@ export default function BookingDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <MapPin className="w-5 h-5" />
+                    <MapPin className="w-5 h-5 text-primary" />
                     Address
                   </CardTitle>
                 </CardHeader>
@@ -263,7 +320,7 @@ export default function BookingDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <User className="w-5 h-5" />
+                    <User className="w-5 h-5 text-primary" />
                     Service Provider
                   </CardTitle>
                 </CardHeader>
@@ -292,9 +349,11 @@ export default function BookingDetailPage() {
                             Call
                           </a>
                         </Button>
-                        <Button size="sm" variant="outline">
-                          <MessageCircle className="w-4 h-4 mr-2" />
-                          Message
+                        <Button size="sm" variant="outline" asChild>
+                          <a href={`https://wa.me/91${booking.provider.user.phone}`} target="_blank" rel="noopener noreferrer">
+                            <MessageCircle className="w-4 h-4 mr-2" />
+                            WhatsApp
+                          </a>
                         </Button>
                       </div>
                     </div>
@@ -303,33 +362,36 @@ export default function BookingDetailPage() {
               </Card>
             )}
 
-            {/* Status History */}
+            {/* Status Timeline */}
             {booking.statusHistory && booking.statusHistory.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Status History</CardTitle>
+                  <CardTitle className="text-lg">Booking Timeline</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {booking.statusHistory.map((history, index) => (
-                      <div key={history.id} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className="w-3 h-3 rounded-full bg-primary" />
-                          {index < booking.statusHistory.length - 1 && (
-                            <div className="w-0.5 h-full bg-border mt-1" />
-                          )}
+                  <div className="space-y-0">
+                    {booking.statusHistory.map((history, index) => {
+                      const isCurrent = index === booking.statusHistory.length - 1
+                      return (
+                        <div key={history.id} className="flex gap-4">
+                          <div className="flex flex-col items-center">
+                            {getTimelineIcon(history.status, isCurrent)}
+                            {index < booking.statusHistory.length - 1 && (
+                              <div className="w-0.5 h-12 bg-border mt-2" />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-6">
+                            <p className="font-medium">{getStatusLabel(history.status)}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(history.createdAt).toLocaleString('en-IN')}
+                            </p>
+                            {history.note && (
+                              <p className="text-sm text-muted-foreground mt-1">{history.note}</p>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1 pb-4">
-                          <p className="font-medium">{history.status.replace('_', ' ')}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(history.createdAt).toLocaleString('en-IN')}
-                          </p>
-                          {history.note && (
-                            <p className="text-sm text-muted-foreground mt-1">{history.note}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -371,12 +433,17 @@ export default function BookingDetailPage() {
                   <span>Total</span>
                   <span className="text-primary">₹{booking.totalAmount}</span>
                 </div>
-                <div className="pt-2">
-                  <Badge className={booking.paymentStatus === 'PAID' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                <div className="pt-2 space-y-2">
+                  <Badge className={booking.paymentStatus === 'PAID' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}>
                     {booking.paymentStatus}
                   </Badge>
+                  {booking.paymentMethod && (
+                    <p className="text-xs text-muted-foreground">
+                      Payment Method: {booking.paymentMethod}
+                    </p>
+                  )}
                   {booking.razorpayPaymentId && (
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="text-xs text-muted-foreground">
                       Payment ID: {booking.razorpayPaymentId}
                     </p>
                   )}
@@ -385,7 +452,7 @@ export default function BookingDetailPage() {
             </Card>
 
             {/* Actions */}
-            {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+            {(booking.status === 'PENDING' || booking.status === 'CONFIRMED' || booking.status === 'PENDING_CONFIRMATION') && (
               <Card>
                 <CardContent className="p-4">
                   <Button

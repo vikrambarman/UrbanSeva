@@ -1,8 +1,17 @@
-// api/bookings/create/route.ts
+/**
+ * WHAT: Production-ready booking creation API
+ * WHY: 
+ * - Use existing addressId from cart (not create new address every time)
+ * - Initial status: PAYMENT_RECEIVED (OPS verification pending)
+ * - Support both ONLINE and COD payment methods
+ * - Send notification to customer after booking creation
+ * NOTE: Backward compatible - old code will still work
+ */
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
+import { sendBookingReceived } from '@/lib/notifications'
 
 export async function POST(request: Request) {
     try {
@@ -29,51 +38,67 @@ export async function POST(request: Request) {
             serviceId,
             scheduledDate,
             scheduledTime,
-            address,
+            addressId, // NEW: Use existing address ID
+            address, // LEGACY: Keep for backward compatibility
             specialInstructions,
+            paymentMethod, // NEW: ONLINE or COD
             baseAmount,
             addOnAmount,
             totalAmount,
         } = body
 
         // Validate required fields
-        if (!serviceId || !scheduledDate || !scheduledTime || !address) {
+        if (!serviceId || !scheduledDate || !scheduledTime) {
             return NextResponse.json(
                 { success: false, error: 'Missing required fields' },
                 { status: 400 }
             )
         }
 
-        // Create address first
-        const createdAddress = await db.address.create({
-            data: {
-                userId: payload.userId,
-                label: address.label,
-                fullAddress: address.fullAddress,
-                area: address.area,
-                landmark: address.landmark,
-                pincode: address.pincode,
-            },
-        })
+        // Determine address ID
+        let finalAddressId = addressId
+
+        // LEGACY: If addressId not provided, create new address (backward compatibility)
+        if (!finalAddressId && address) {
+            const createdAddress = await db.address.create({
+                data: {
+                    userId: payload.userId,
+                    label: address.label,
+                    fullAddress: address.fullAddress,
+                    area: address.area,
+                    landmark: address.landmark,
+                    pincode: address.pincode,
+                },
+            })
+            finalAddressId = createdAddress.id
+        }
+
+        if (!finalAddressId) {
+            return NextResponse.json(
+                { success: false, error: 'Address is required' },
+                { status: 400 }
+            )
+        }
 
         // Generate booking number
         const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`
 
-        // Create booking
+        // Create booking with NEW status flow
         const booking = await db.booking.create({
             data: {
                 bookingNumber,
                 userId: payload.userId,
                 serviceId,
-                addressId: createdAddress.id,
+                addressId: finalAddressId,
                 scheduledDate: new Date(scheduledDate),
                 scheduledTime,
                 baseAmount,
                 addOnAmount: addOnAmount || 0,
                 totalAmount,
                 specialInstructions,
-                status: 'PENDING',
-                paymentStatus: 'PENDING',
+                paymentMethod: paymentMethod || 'ONLINE', // NEW: Payment method
+                status: 'PAYMENT_RECEIVED', // NEW: Initial status (not PENDING)
+                paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
             },
             include: {
                 service: true,
@@ -87,20 +112,41 @@ export async function POST(request: Request) {
             },
         })
 
-        // ═══════════════════════════════════════════════════════════════
-        // ✅ FIX: Payment record create karo — PENDING status ke saath
-        // Pehle ye missing tha — isliye admin panel mein payment tab khali rehta tha
-        // Jab /api/payments/create-order call hoga, tab ye record update hoga
-        // razorpayOrderId ke saath, aur /api/payments/verify mein status PAID hoga
-        // ═══════════════════════════════════════════════════════════════
+        // Create payment record
         await db.payment.create({
             data: {
                 bookingId: booking.id,
                 amount: totalAmount,
                 currency: 'INR',
-                status: 'PENDING',
+                method: paymentMethod || 'ONLINE',
+                status: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
             },
         })
+
+        // Create status history
+        await db.bookingStatusHistory.create({
+            data: {
+                bookingId: booking.id,
+                status: 'PAYMENT_RECEIVED',
+                note: paymentMethod === 'COD' 
+                    ? 'Booking created via Cash on Delivery' 
+                    : 'Payment received, waiting for OPS confirmation',
+                changedBy: payload.userId,
+            },
+        })
+
+        // Send notification to customer
+        try {
+            await sendBookingReceived(
+                payload.userId,
+                booking.user.phone,
+                booking.bookingNumber,
+                booking.totalAmount
+            )
+        } catch (notifError) {
+            console.error('Notification error:', notifError)
+            // Don't fail booking if notification fails
+        }
 
         return NextResponse.json({
             success: true,

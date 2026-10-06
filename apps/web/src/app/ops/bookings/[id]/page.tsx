@@ -88,15 +88,28 @@ interface Provider {
     services: { id: string; name: string; category: string }[]
 }
 
+// ═══════════════════════════════════════════════════════════════
+// UPDATED: Status config with NEW production statuses
+// ═══════════════════════════════════════════════════════════════
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+    // NEW Production Flow
+    PAYMENT_RECEIVED: { label: 'Payment Received', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: CreditCard },
+    PENDING_CONFIRMATION: { label: 'Awaiting Confirmation', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
+    RESCHEDULE_PENDING: { label: 'Reschedule Pending', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: RefreshCw },
+
+    // Legacy
     PENDING: { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
     CONFIRMED: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: CheckCircle2 },
     PROVIDER_ASSIGNED: { label: 'Assigned', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
-    PROVIDER_TRAVELLING: { label: 'Travelling', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
+    PROVIDER_TRAVELLING: { label: 'On The Way', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
     SERVICE_STARTED: { label: 'In Progress', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', icon: Wrench },
     SERVICE_COMPLETED: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
     CANCELLED: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+    CANCELLED_BY_CUSTOMER: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+    CANCELLED_BY_OPS: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+    CANCELLED_BY_PROVIDER: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
 }
+
 
 export default function OpsBookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter()
@@ -143,7 +156,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
 
     useEffect(() => {
         if (bookingId) fetchBooking()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bookingId])
 
     const fetchBooking = async () => {
@@ -171,7 +184,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
         if (assignModal && !providersLoaded && booking) {
             fetchProvidersForCategory()
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [assignModal])
 
     const fetchProvidersForCategory = async () => {
@@ -383,10 +396,13 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
         )
     }
 
-    const canAssign = ['PENDING', 'CONFIRMED'].includes(booking.status)
+    // ═══════════════════════════════════════════════════════════════
+    // UPDATED: canAssign logic - Include new statuses
+    // ═══════════════════════════════════════════════════════════════
+    const canAssign = ['PENDING', 'CONFIRMED', 'PAYMENT_RECEIVED', 'PENDING_CONFIRMATION'].includes(booking.status)
     const canChangeProvider = ['PROVIDER_ASSIGNED', 'PROVIDER_TRAVELLING'].includes(booking.status) && booking.provider
-    const canReschedule = !['CANCELLED', 'REFUNDED', 'SERVICE_COMPLETED'].includes(booking.status)
-    const canCancel = !['CANCELLED', 'REFUNDED'].includes(booking.status)
+    const canReschedule = !['CANCELLED', 'REFUNDED', 'SERVICE_COMPLETED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER'].includes(booking.status)
+    const canCancel = !['CANCELLED', 'REFUNDED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER'].includes(booking.status)
 
     return (
         <div className="space-y-6">
@@ -569,11 +585,10 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                                     </p>
                                                 )}
                                                 {log.notes && (
-                                                    <p className={`text-xs mt-1 p-2 rounded ${
-                                                        log.action === 'NOTE_ADDED' 
-                                                            ? 'bg-amber-50 border border-amber-200 text-amber-800' 
+                                                    <p className={`text-xs mt-1 p-2 rounded ${log.action === 'NOTE_ADDED'
+                                                            ? 'bg-amber-50 border border-amber-200 text-amber-800'
                                                             : 'bg-muted'
-                                                    }`}>
+                                                        }`}>
                                                         {log.notes}
                                                     </p>
                                                 )}
@@ -629,7 +644,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
 
                                     {/* Contact Buttons */}
                                     <div className="flex gap-2">
-                                        <a 
+                                        <a
                                             href={`tel:${booking.provider.user.phone}`}
                                             className="flex-1"
                                         >
@@ -638,7 +653,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                                 Call
                                             </Button>
                                         </a>
-                                        <a 
+                                        <a
                                             href={`https://wa.me/91${booking.provider.user.phone}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
@@ -683,9 +698,9 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
 
                                     {/* CHANGE: Change Provider Button */}
                                     {canChangeProvider && (
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
                                             className="w-full mt-2"
                                             onClick={handleChangeProvider}
                                         >
@@ -804,7 +819,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                     <DialogHeader>
                         <DialogTitle>{isChangingProvider ? 'Change Provider' : 'Assign Provider'}</DialogTitle>
                         <DialogDescription>
-                            {isChangingProvider 
+                            {isChangingProvider
                                 ? `Current provider: ${booking.provider?.user.name}. Select a new provider for booking #${booking.bookingNumber}`
                                 : `Select a provider for booking #${booking.bookingNumber}`
                             }
@@ -844,11 +859,10 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                 providers.map((p) => (
                                     <div
                                         key={p.id}
-                                        className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                                            selectedProvider === p.id 
-                                                ? 'border-primary bg-primary/5 ring-2 ring-primary' 
+                                        className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedProvider === p.id
+                                                ? 'border-primary bg-primary/5 ring-2 ring-primary'
                                                 : 'hover:bg-muted hover:border-primary/50'
-                                        } ${!p.isAvailable ? 'opacity-70' : ''}`}
+                                            } ${!p.isAvailable ? 'opacity-70' : ''}`}
                                         onClick={() => p.isAvailable && setSelectedProvider(p.id)}
                                     >
                                         <div className="flex items-start gap-3">
@@ -899,7 +913,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                         )}
 
                                         <div className="flex gap-2 mt-3 pt-3 border-t">
-                                            <a 
+                                            <a
                                                 href={`tel:${p.user.phone}`}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="flex-1"
@@ -909,7 +923,7 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                                     Call
                                                 </Button>
                                             </a>
-                                            <a 
+                                            <a
                                                 href={`https://wa.me/91${p.user.phone}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"

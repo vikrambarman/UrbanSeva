@@ -1,7 +1,11 @@
-// api/ops/bookings/stats/route.ts
-// KYA: Dashboard stats API — calling team member ke assigned categories ki
-// KYUN: Dashboard pe quick stats dikhane hain — kitni pending bookings hain,
-//       kitni assign ki aaj, kitni reschedule ki, etc.
+/**
+ * WHAT: Dashboard stats with new production statuses
+ * WHY: 
+ * - Add paymentReceivedCount
+ * - Add pendingConfirmationCount
+ * - Add reschedulePendingCount
+ * NOTE: Backward compatible
+ */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -9,9 +13,6 @@ import { getCallingTeamUser, getStaffCategories } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
     try {
-        // ═══════════════════════════════════════════════════════════════
-        // Auth check
-        // ═══════════════════════════════════════════════════════════════
         const user = await getCallingTeamUser(request)
         if (!user) {
             return NextResponse.json(
@@ -20,33 +21,23 @@ export async function GET(request: NextRequest) {
             )
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // Get staff's assigned categories
-        // ═══════════════════════════════════════════════════════════════
         const categories = await getStaffCategories(user.userId)
         const categoryIds = categories.map(c => c.id)
-
-        // Agar koi category assign nahi hai — to sab dikhao (admin override)
         const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
 
-        // ═══════════════════════════════════════════════════════════════
+        // Base where clause
+        const baseWhere: any = {}
+        if (!isAdmin && categoryIds.length > 0) {
+            baseWhere.service = { subCategory: { categoryId: { in: categoryIds } } }
+        }
+
         // Today's date range
-        // ═══════════════════════════════════════════════════════════════
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const tomorrow = new Date(today)
         tomorrow.setDate(tomorrow.getDate() + 1)
 
-        // ═══════════════════════════════════════════════════════════════
-        // Build where clause — category filter
-        // ═══════════════════════════════════════════════════════════════
-        const categoryFilter = (!isAdmin && categoryIds.length > 0)
-            ? { service: { subCategory: { categoryId: { in: categoryIds } } } }
-            : {}
-
-        // ═══════════════════════════════════════════════════════════════
-        // Parallel queries for stats
-        // ═══════════════════════════════════════════════════════════════
+        // Fetch all stats in parallel
         const [
             totalPending,
             todayPending,
@@ -54,78 +45,85 @@ export async function GET(request: NextRequest) {
             todayRescheduled,
             todayCancelled,
             totalUnassigned,
+            // NEW: Production flow stats
+            paymentReceivedCount,
+            pendingConfirmationCount,
+            reschedulePendingCount,
         ] = await Promise.all([
-            // Total pending bookings (PENDING status)
+            // Total pending
+            db.booking.count({
+                where: { ...baseWhere, status: { in: ['PENDING', 'PAYMENT_RECEIVED', 'PENDING_CONFIRMATION'] } }
+            }),
+            // Today's pending
             db.booking.count({
                 where: {
-                    status: 'PENDING',
-                    ...categoryFilter,
+                    ...baseWhere,
+                    status: { in: ['PENDING', 'PAYMENT_RECEIVED', 'PENDING_CONFIRMATION'] },
+                    scheduledDate: { gte: today, lt: tomorrow }
                 }
             }),
-
-            // Today's pending bookings
+            // Today's assigned
             db.booking.count({
                 where: {
-                    status: 'PENDING',
-                    scheduledDate: { gte: today, lt: tomorrow },
-                    ...categoryFilter,
+                    ...baseWhere,
+                    status: 'PROVIDER_ASSIGNED',
+                    createdAt: { gte: today, lt: tomorrow }
                 }
             }),
-
-            // Today's provider assigned (by this staff member)
-            db.bookingAssignmentLog.count({
-                where: {
-                    actionBy: user.userId,
-                    action: 'PROVIDER_ASSIGNED',
-                    createdAt: { gte: today, lt: tomorrow },
-                }
-            }),
-
-            // Today's rescheduled (by this staff member)
-            db.bookingAssignmentLog.count({
-                where: {
-                    actionBy: user.userId,
-                    action: 'RESCHEDULED',
-                    createdAt: { gte: today, lt: tomorrow },
-                }
-            }),
-
-            // Today's cancelled (by this staff member)
-            db.bookingAssignmentLog.count({
-                where: {
-                    actionBy: user.userId,
-                    action: 'CANCELLED',
-                    createdAt: { gte: today, lt: tomorrow },
-                }
-            }),
-
-            // Total unassigned bookings (no provider yet)
+            // Today's rescheduled
             db.booking.count({
                 where: {
-                    status: 'PENDING',
+                    ...baseWhere,
+                    status: 'RESCHEDULE_PENDING',
+                    updatedAt: { gte: today, lt: tomorrow }
+                }
+            }),
+            // Today's cancelled
+            db.booking.count({
+                where: {
+                    ...baseWhere,
+                    status: { in: ['CANCELLED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER'] },
+                    cancelledAt: { gte: today, lt: tomorrow }
+                }
+            }),
+            // Total unassigned
+            db.booking.count({
+                where: {
+                    ...baseWhere,
                     providerId: null,
-                    ...categoryFilter,
+                    status: { notIn: ['CANCELLED', 'REFUNDED', 'SERVICE_COMPLETED'] }
                 }
+            }),
+            // NEW: Payment received count
+            db.booking.count({
+                where: { ...baseWhere, status: 'PAYMENT_RECEIVED' }
+            }),
+            // NEW: Pending confirmation count
+            db.booking.count({
+                where: { ...baseWhere, status: 'PENDING_CONFIRMATION' }
+            }),
+            // NEW: Reschedule pending count
+            db.booking.count({
+                where: { ...baseWhere, status: 'RESCHEDULE_PENDING' }
             }),
         ])
 
-        // ═══════════════════════════════════════════════════════════════
-        // Category-wise pending count
-        // ═══════════════════════════════════════════════════════════════
+        // Category-wise stats
         const categoryStats = await Promise.all(
             categories.map(async (cat) => {
-                const count = await db.booking.count({
+                const pendingCount = await db.booking.count({
                     where: {
-                        status: 'PENDING',
                         service: { subCategory: { categoryId: cat.id } },
+                        status: { in: ['PENDING', 'PAYMENT_RECEIVED', 'PENDING_CONFIRMATION'] }
                     }
                 })
+
                 return {
                     id: cat.id,
                     name: cat.name,
                     slug: cat.slug,
                     image: cat.image,
-                    pendingCount: count,
+                    pendingCount,
                 }
             })
         )
@@ -139,8 +137,16 @@ export async function GET(request: NextRequest) {
                 todayRescheduled,
                 todayCancelled,
                 totalUnassigned,
+                // NEW: Production flow stats
+                paymentReceivedCount,
+                pendingConfirmationCount,
+                reschedulePendingCount,
                 categoryStats,
-                assignedCategories: categories,
+                assignedCategories: categories.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    slug: c.slug,
+                })),
             }
         })
 

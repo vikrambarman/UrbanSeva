@@ -1,7 +1,17 @@
+/**
+ * WHAT: Payment verification with production status flow
+ * WHY: 
+ * - After payment, status becomes PENDING_CONFIRMATION (not CONFIRMED)
+ * - OPS team will verify slot availability and confirm
+ * - Customer receives "Booking received" notification
+ * NOTE: Backward compatible with existing flow
+ */
+
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
 import { verifySignature } from '@/lib/razorpay'
+import { sendPaymentSuccess } from '@/lib/notifications'
 
 export async function POST(request: Request) {
   try {
@@ -26,7 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid payment signature' }, { status: 400 })
     }
 
-    // Find payment record using razorpayOrderId (findFirst instead of update)
+    // Find payment record
     const payment = await db.payment.findFirst({
       where: { razorpayOrderId },
     })
@@ -35,7 +45,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Payment record not found' }, { status: 404 })
     }
 
-    // Update payment record using id
+    // Update payment record
     await db.payment.update({
       where: { id: payment.id },
       data: {
@@ -46,7 +56,7 @@ export async function POST(request: Request) {
       },
     })
 
-    // Update bookings
+    // Update bookings - NEW STATUS FLOW
     await db.booking.updateMany({
       where: {
         id: { in: bookingIds },
@@ -55,7 +65,7 @@ export async function POST(request: Request) {
       data: {
         razorpayPaymentId,
         paymentStatus: 'PAID',
-        status: 'CONFIRMED',
+        status: 'PENDING_CONFIRMATION', // NEW: Waiting for OPS confirmation
       },
     })
 
@@ -64,11 +74,29 @@ export async function POST(request: Request) {
       await db.bookingStatusHistory.create({
         data: {
           bookingId,
-          status: 'CONFIRMED',
-          note: 'Payment received successfully',
+          status: 'PENDING_CONFIRMATION',
+          note: 'Payment verified. Waiting for OPS team to confirm slot and assign provider.',
           changedBy: payload.userId,
         },
       })
+    }
+
+    // Send payment success notification
+    try {
+      const bookings = await db.booking.findMany({
+        where: { id: { in: bookingIds } },
+        include: { user: { select: { phone: true } } },
+      })
+
+      for (const booking of bookings) {
+        await sendPaymentSuccess(
+          booking.userId,
+          booking.id,
+          booking.totalAmount
+        )
+      }
+    } catch (notifError) {
+      console.error('Notification error:', notifError)
     }
 
     return NextResponse.json({

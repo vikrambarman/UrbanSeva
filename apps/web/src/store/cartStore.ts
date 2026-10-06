@@ -1,3 +1,9 @@
+/**
+ * WHAT: Cart Store with address support
+ * WHY: Production flow mein address selection zaroori hai before checkout
+ * NOTE: Added addressId field for address selection
+ */
+
 'use client'
 
 import { create } from 'zustand'
@@ -25,12 +31,15 @@ interface CartItem {
 
 interface CartState {
   items: CartItem[]
+  addressId: string | null // NEW: Selected address ID
   
   // Actions
   addItem: (item: Omit<CartItem, 'id'>) => void
   removeItem: (itemId: string) => void
   updateQuantity: (itemId: string, quantity: number) => void
   updateSchedule: (itemId: string, date: string, time: string) => void
+  setAddress: (addressId: string) => void // NEW: Set address
+  clearAddress: () => void // NEW: Clear address
   clearCart: () => void
   
   // Calculations
@@ -43,6 +52,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      addressId: null, // NEW: Initialize address
 
       addItem: (item) => {
         const id = `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -75,7 +85,15 @@ export const useCartStore = create<CartState>()(
         }))
       },
 
-      clearCart: () => set({ items: [] }),
+      setAddress: (addressId) => {
+        set({ addressId })
+      },
+
+      clearAddress: () => {
+        set({ addressId: null })
+      },
+
+      clearCart: () => set({ items: [], addressId: null }),
 
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0)

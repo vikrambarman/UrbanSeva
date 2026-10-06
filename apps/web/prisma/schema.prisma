@@ -17,7 +17,7 @@ enum Role {
   PROVIDER
   ADMIN
   SUPER_ADMIN
-  CALLING_TEAM    // ← NEW: Ops portal ke liye calling team members
+  CALLING_TEAM    // ← Ops portal ke liye calling team members
 }
 
 enum LoyaltyTier {
@@ -42,16 +42,68 @@ enum ProviderStatus {
   SUSPENDED
 }
 
+// ═══════════════════════════════
+// BOOKING STATUS - PRODUCTION FLOW
+// ═══════════════════════════════
+// KYA: Complete booking lifecycle with verification workflow
+// KYUN: Real production flow - payment ke baad OPS verify karega,
+//       phir provider assign hoga, tab customer ko confirmation milega
+// NOTE: Legacy statuses (PENDING, CONFIRMED) rakhe hain backward compatibility ke liye
 enum BookingStatus {
+  // Legacy statuses (keep for backward compatibility)
   PENDING
   CONFIRMED
+  
+  // New Production Flow - Customer Journey
+  PAYMENT_RECEIVED      // Payment done, waiting OPS verification
+  PENDING_CONFIRMATION  // OPS verifying slot & provider availability
+  
+  // Confirmation Flow
+  RESCHEDULE_PENDING    // OPS proposed new slot, waiting customer OTP
+  
+  // Service Execution (existing)
   PROVIDER_ASSIGNED
   PROVIDER_TRAVELLING
   SERVICE_STARTED
   SERVICE_COMPLETED
+  
+  // Terminal States (existing)
   CANCELLED
   REFUND_INITIATED
   REFUNDED
+  
+  // New Terminal States - Granular cancellation tracking
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_OPS
+  CANCELLED_BY_PROVIDER
+  NO_SHOW
+  FAILED
+}
+
+// ═══════════════════════════════
+// PROVIDER WORK STATUS - REAL-TIME TRACKING
+// ═══════════════════════════════
+// KYA: Provider ka current real-time status
+// KYUN: OPS team ko pata hona chahiye ki provider available hai ya busy
+//       Agar provider WORKING hai, toh OPS ko warning milegi before assigning
+enum ProviderWorkStatus {
+  AVAILABLE     // Free, can take new jobs
+  ON_THE_WAY    // Going to customer location
+  WORKING       // Currently servicing customer
+  ON_BREAK      // Temporary break (30 mins max)
+  OFFLINE       // Not available for jobs
+}
+
+// ═══════════════════════════════
+// RESCHEDULE STATUS - OTP CONFIRMATION
+// ═══════════════════════════════
+// KYA: Reschedule request ka status
+// KYUN: OPS ne naya slot propose kiya, customer ko OTP se confirm karna hai
+enum RescheduleStatus {
+  PENDING    // Waiting for customer OTP
+  CONFIRMED  // Customer confirmed via OTP
+  REJECTED   // Customer rejected or OTP expired
+  CANCELLED  // OPS cancelled the request
 }
 
 enum PaymentStatus {
@@ -101,13 +153,19 @@ enum NotificationType {
   REVIEW_REQUEST
   OFFER
   GENERAL
+  // New notification types
+  BOOKING_RECEIVED          // Payment done, waiting confirmation
+  RESCHEDULE_REQUESTED      // OPS proposed new slot
+  PROVIDER_ON_THE_WAY       // Provider going to location
 }
 
 enum PropertyType {
   SINGLE_ROOM
   ONE_RK
   ONE_BHK
+  TWO_RK
   TWO_BHK
+  THREE_RK
   THREE_BHK
   INDEPENDENT_HOUSE
   BUNGALOW
@@ -162,7 +220,7 @@ model User {
   phone         String      @unique
   name          String?
   email         String?
-  password      String?     // <-- YE ADD KARO
+  password      String?
   avatar        String?
   role          Role        @default(CUSTOMER)
   isActive      Boolean     @default(true)
@@ -174,7 +232,7 @@ model User {
   loyaltyPoints Int         @default(0)
   loyaltyTier   LoyaltyTier @default(BRONZE)
   
-  // NEW FIELDS - Login tracking
+  // Login tracking
   lastLoginAt   DateTime?
   loginCount    Int         @default(0)
   
@@ -191,17 +249,9 @@ model User {
   properties    Property[]
   subscriptions UserSubscription[]
   
-  // ═══════════════════════════════
-  // NEW RELATIONS — Calling Team Portal
-  // ═══════════════════════════════
-  
-  // Staff member ki assigned categories (agar role = CALLING_TEAM)
+  // Calling Team Portal
   staffCategories      StaffCategory[]        @relation("StaffCategories")
-  
-  // Admin ne kaunsi categories assign ki (tracking)
   assignedCategories   StaffCategory[]        @relation("StaffCategoryAssignedBy")
-  
-  // Staff ne kaunse booking actions liye (activity log)
   assignmentLogs       BookingAssignmentLog[] @relation("AssignmentLogs")
 }
 
@@ -265,11 +315,6 @@ model Category {
   createdAt     DateTime      @default(now())
 
   subCategories SubCategory[]
-  
-  // ═══════════════════════════════
-  // NEW RELATION — Calling Team Portal
-  // ═══════════════════════════════
-  // Kis staff member ko ye category assign hai
   staffCategories StaffCategory[]
 }
 
@@ -389,29 +434,39 @@ model ServiceFAQ {
 // ═══════════════════════════════
 
 model Provider {
-  id              String         @id @default(cuid())
-  userId          String         @unique
+  id              String             @id @default(cuid())
+  userId          String             @unique
   bio             String?
-  experience      Int            @default(0)
+  experience      Int                @default(0)
   aadharNumber    String?
   panNumber       String?
   aadharImage     String?
   panImage        String?
-  policeVerified  Boolean        @default(false)
+  policeVerified  Boolean            @default(false)
   portfolioImages String[]
   bankAccount     String?
   bankIFSC        String?
   bankName        String?
   upiId           String?
-  commissionRate  Float          @default(20)
-  status          ProviderStatus @default(PENDING)
-  avgRating       Float          @default(0)
-  totalJobs       Int            @default(0)
-  totalEarnings   Float          @default(0)
-  isAvailable     Boolean        @default(false)
+  commissionRate  Float              @default(20)
+  status          ProviderStatus     @default(PENDING)
+  avgRating       Float              @default(0)
+  totalJobs       Int                @default(0)
+  totalEarnings   Float              @default(0)
+  isAvailable     Boolean            @default(false)
   serviceAreas    String[]
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  
+  // ═══════════════════════════════
+  // NEW FIELDS - Real-time Status Tracking
+  // ═══════════════════════════════
+  // KYA: Provider ka current work status aur active job
+  // KYUN: OPS team ko pata chalega ki provider available hai ya busy
+  //       Agar WORKING hai toh warning dikhegi before assigning
+  currentWorkStatus ProviderWorkStatus @default(AVAILABLE)
+  currentJobId      String?            // Currently assigned booking ID
+  
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   user         User                   @relation(fields: [userId], references: [id])
   services     ProviderService[]
@@ -474,7 +529,7 @@ model Booking {
   couponCode          String?
   totalAmount         Float
   paymentStatus       PaymentStatus @default(PENDING)
-  paymentMethod       String?
+  paymentMethod       String?       // "ONLINE" | "COD"
   razorpayOrderId     String?
   razorpayPaymentId   String?
   startOTP            String?
@@ -496,15 +551,45 @@ model Booking {
   review        Review?
   payment       Payment?
   statusHistory BookingStatusHistory[]
+  assignmentLogs BookingAssignmentLog[]
   
   // ═══════════════════════════════
-  // NEW RELATION — Calling Team Portal
+  // NEW RELATION - Reschedule Requests
   // ═══════════════════════════════
-  // Is booking pe kaunse staff ne kya actions liye
-  assignmentLogs BookingAssignmentLog[]
+  rescheduleRequests RescheduleRequest[]
 
   @@index([userId])
   @@index([providerId])
+  @@index([status])
+}
+
+// ═══════════════════════════════
+// RESCHEDULE REQUEST MODEL - OTP CONFIRMATION
+// ═══════════════════════════════
+// KYA: OPS ya customer ne reschedule request ki hai, OTP se confirm hoga
+// KYUN: Security - customer ki permission ke bina booking reschedule nahi hogi
+//       OTP valid for 10 minutes, max 3 attempts
+model RescheduleRequest {
+  id              String           @id @default(cuid())
+  bookingId       String
+  originalSlot    DateTime         // Purana scheduled time
+  proposedSlot    DateTime         // Naya proposed time
+  reason          String?          // Why rescheduling
+  
+  otp             String           // 4-digit OTP
+  otpExpiresAt    DateTime         // OTP expiry (10 mins)
+  otpAttempts     Int              @default(0) // Track failed attempts
+  
+  status          RescheduleStatus @default(PENDING)
+  requestedBy     String           // "OPS" | "CUSTOMER" | "PROVIDER"
+  
+  confirmedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
   @@index([status])
 }
 
@@ -830,7 +915,6 @@ model AppSetting {
   updatedAt   DateTime @updatedAt
 }
 
-
 // ═══════════════════════════════
 // GLOBAL FAQ MODEL
 // ═══════════════════════════════
@@ -845,67 +929,51 @@ model FAQ {
   createdAt DateTime @default(now())
 }
 
-
 model ProviderInquiry {
   id         String   @id @default(cuid())
   name       String
   phone      String   @unique
   email      String?
   experience Int?
-  services   String?  // Comma-separated service names
+  services   String?
   city       String?
   message    String?  @db.Text
-  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED, CONTACTED
-  notes      String?  @db.Text // Admin notes
+  status     String   @default("PENDING")
+  notes      String?  @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// CALLING TEAM PORTAL — NEW MODELS
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════
+// CALLING TEAM PORTAL
+// ═══════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────
-// StaffCategory: Maps calling team members to service categories
-// ─────────────────────────────────────────────────────────────────
-// KYA: Staff member ko kaunsi categories manage karne ka access hai
-// KYUN: Category-wise specialization — staff sirf apni assigned categories
-//       ki bookings dekhega aur manage karega. Admin se assign hoga.
 model StaffCategory {
   id         String   @id @default(cuid())
-  userId     String   // Calling team member ka ID
-  categoryId String   // Category ID jo assign hai
-  assignedBy String   // Admin ne assign kiya (tracking)
+  userId     String
+  categoryId String
+  assignedBy String
   createdAt  DateTime @default(now())
 
-  // Relations
   user           User     @relation("StaffCategories", fields: [userId], references: [id], onDelete: Cascade)
   category       Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   assignedByUser User     @relation("StaffCategoryAssignedBy", fields: [assignedBy], references: [id])
 
-  @@unique([userId, categoryId]) // Ek staff ko ek category sirf ek baar
+  @@unique([userId, categoryId])
   @@index([userId])
   @@index([categoryId])
 }
 
-// ─────────────────────────────────────────────────────────────────
-// BookingAssignmentLog: Activity trail for booking actions
-// ─────────────────────────────────────────────────────────────────
-// KYA: Kaunse staff/admin ne booking pe kya action liya, kab liya
-// KYUN: Production mein accountability zaroori hai — dispute resolution,
-//       performance review, aur audit trail ke liye.
-//       Example: "Rahul ne 12:30 pe provider assign kiya", "Priya ne reschedule kiya"
 model BookingAssignmentLog {
   id        String   @id @default(cuid())
-  bookingId String   // Kis booking pe action hua
-  actionBy  String   // Kis staff/admin ne kiya
-  action    String   // PROVIDER_ASSIGNED | RESCHEDULED | CANCELLED | NOTE_ADDED
-  fromValue String?  // Old value (e.g., purana provider name / purana date-time)
-  toValue   String?  // New value (e.g., naya provider name / naya date-time)
-  notes     String?  // Optional notes (e.g., "Customer ne bola 5 baje aayein")
+  bookingId String
+  actionBy  String
+  action    String
+  fromValue String?
+  toValue   String?
+  notes     String?
   createdAt DateTime @default(now())
 
-  // Relations
   booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   assignedBy User   @relation("AssignmentLogs", fields: [actionBy], references: [id])
 

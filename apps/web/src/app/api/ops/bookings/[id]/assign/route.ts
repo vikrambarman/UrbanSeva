@@ -1,12 +1,16 @@
-// api/ops/bookings/[id]/assign/route.ts
-// CHANGE: TypeScript error fix kiya — provider.user access ko safe banaya
-// CHANGE: Provider ko pehle simple findUnique se fetch kiya, phir user alag se
-// WHY: Prisma ka type inference include relations ke saath kabhi-kabhi fail hota hai.
-//       Separate queries se type safety ensure hoti hai aur error nahi aata.
+/**
+ * WHAT: Assign provider with work status check
+ * WHY: 
+ * - Check provider.currentWorkStatus before assigning
+ * - If WORKING/ON_THE_WAY → Return warning (but still allow assignment)
+ * - Update provider.currentJobId and currentWorkStatus
+ * NOTE: OPS can override warning if needed
+ */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCallingTeamUser } from '@/lib/auth'
+import { sendProviderAssigned } from '@/lib/notifications'
 
 export async function POST(
     request: NextRequest,
@@ -32,24 +36,13 @@ export async function POST(
             )
         }
 
-        // ═══════════════════════════════════════════════════════════════
         // Verify booking exists
-        // ═══════════════════════════════════════════════════════════════
         const booking = await db.booking.findUnique({
             where: { id: bookingId },
             include: {
-                service: {
-                    include: {
-                        subCategory: true
-                    }
-                },
-                provider: {
-                    include: {
-                        user: {
-                            select: { name: true }
-                        }
-                    }
-                },
+                service: { include: { subCategory: true } },
+                provider: { include: { user: { select: { name: true } } } },
+                user: { select: { name: true, phone: true } },
             }
         })
 
@@ -60,10 +53,7 @@ export async function POST(
             )
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // Verify provider exists and is active
-        // CHANGE: Provider aur User alag-alag fetch kiye — type safety ke liye
-        // ═══════════════════════════════════════════════════════════════
+        // Verify provider exists
         const provider = await db.provider.findUnique({
             where: { id: providerId },
         })
@@ -82,20 +72,29 @@ export async function POST(
             )
         }
 
-        // CHANGE: Provider ka user alag se fetch kiya — type-safe approach
+        // ═══════════════════════════════════════════════════════════════
+        // NEW: Check provider work status
+        // ═══════════════════════════════════════════════════════════════
+        const providerWorkStatus = provider.currentWorkStatus || 'AVAILABLE'
+        let warning = null
+
+        if (providerWorkStatus === 'WORKING') {
+            warning = `Provider is currently working on another job (ID: ${provider.currentJobId}). Assignment may be delayed.`
+        } else if (providerWorkStatus === 'ON_THE_WAY') {
+            warning = `Provider is on the way to another job. Assignment may be delayed.`
+        }
+
         const providerUser = await db.user.findUnique({
             where: { id: provider.userId },
-            select: { name: true }
+            select: { name: true, phone: true }
         })
 
-        // ═══════════════════════════════════════════════════════════════
-        // Update booking + create activity log + status history
-        // ═══════════════════════════════════════════════════════════════
-        // CHANGE: booking.provider?.user?.name → booking.provider?.user?.name (safe access)
-        //         provider.user?.name → providerUser?.name (separate variable)
         const oldProviderName = booking.provider?.user?.name || 'None'
         const newProviderName = providerUser?.name || 'Unknown'
 
+        // ═══════════════════════════════════════════════════════════════
+        // Update booking + provider status + create logs
+        // ═══════════════════════════════════════════════════════════════
         const [updatedBooking] = await db.$transaction([
             // Update booking
             db.booking.update({
@@ -109,6 +108,15 @@ export async function POST(
                     provider: { include: { user: { select: { name: true, phone: true } } } },
                     service: { select: { name: true } },
                 }
+            }),
+
+            // NEW: Update provider work status
+            db.provider.update({
+                where: { id: providerId },
+                data: {
+                    currentJobId: bookingId,
+                    currentWorkStatus: 'AVAILABLE', // Will be updated when provider starts
+                },
             }),
 
             // Create activity log
@@ -134,10 +142,26 @@ export async function POST(
             }),
         ])
 
+        // ═══════════════════════════════════════════════════════════════
+        // NEW: Send notification to customer
+        // ═══════════════════════════════════════════════════════════════
+        try {
+            await sendProviderAssigned(
+                booking.userId,
+                booking.user.phone,
+                booking.bookingNumber,
+                newProviderName,
+                providerUser?.phone || ''
+            )
+        } catch (notifError) {
+            console.error('Notification error:', notifError)
+        }
+
         return NextResponse.json({
             success: true,
             message: `Provider ${newProviderName} assigned successfully`,
             data: updatedBooking,
+            warning, // NEW: Return warning if provider is busy
         })
 
     } catch (error) {
