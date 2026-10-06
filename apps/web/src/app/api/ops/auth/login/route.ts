@@ -1,8 +1,8 @@
-// api/ops/auth/login/route.ts
-// KYA: Calling team members ka login endpoint — phone + password
-// KYUN: Ops portal ka alag auth flow hai. Admin ne staff create karte time
-//       phone + password set kiya hoga. Staff yahan login karega.
-// WHY SEPARATE: Admin login se alag rakhna — security aur clarity ke liye
+// apps/web/src/app/api/ops/auth/login/route.ts
+// CHANGE: Login response mein http-only cookie set ki
+// CHANGE: Token ko cookie mein bhi store kiya (7 days expiry)
+// WHY: Middleware token cookie se verify karta hai. Pehle sirf JSON mein token ja raha tha,
+//      isliye page refresh par middleware ko cookie nahi milti thi aur login par redirect ho jata tha.
 
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
@@ -121,9 +121,9 @@ export async function POST(request: NextRequest) {
         })
 
         // ═══════════════════════════════════════════════════════════════
-        // Response
+        // Response with cookie
         // ═══════════════════════════════════════════════════════════════
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             message: 'Login successful',
             data: {
@@ -139,6 +139,17 @@ export async function POST(request: NextRequest) {
                 }
             }
         })
+
+        // CHANGE: Set token as cookie so middleware can verify on page refresh
+        response.cookies.set('token', token, {
+            httpOnly: false, // Frontend ko bhi read karna hai
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 60 * 60 * 24 * 7, // 7 days
+        })
+
+        return response
 
     } catch (error) {
         console.error('❌ Ops login error:', error)

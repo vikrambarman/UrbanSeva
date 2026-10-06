@@ -1,10 +1,12 @@
-// src/app/api/admin/providers/create/route.ts (Update)
+// apps/web/src/app/api/admin/providers/create/route.ts
+// CHANGE: serviceIds array receive karke ProviderService entries create ki
+// CHANGE: Transaction mein sab kuch ek saath hoga — atomic operation
+// WHY: Provider create karte waqt hi services assign ho jayengi
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAdminUser } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
-import { getSMSProvider } from '@/lib/sms'
 
 export async function POST(request: NextRequest) {
     try {
@@ -19,7 +21,8 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const { 
             name, phone, email, password, experience, 
-            bio, commissionRate, aadharNumber, panNumber 
+            bio, commissionRate, aadharNumber, panNumber,
+            serviceIds // NEW: Array of service IDs
         } = body
 
         // Validate
@@ -33,6 +36,14 @@ export async function POST(request: NextRequest) {
         if (phone.length !== 10) {
             return NextResponse.json(
                 { success: false, error: 'Phone must be 10 digits' },
+                { status: 400 }
+            )
+        }
+
+        // Validate serviceIds
+        if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
+            return NextResponse.json(
+                { success: false, error: 'At least one service must be selected' },
                 { status: 400 }
             )
         }
@@ -52,8 +63,9 @@ export async function POST(request: NextRequest) {
         const plainPassword = password
         const hashedPassword = await bcrypt.hash(password, 10)
 
-        // Create provider
+        // CHANGE: Transaction mein sab kuch ek saath — atomic operation
         const result = await db.$transaction(async (tx) => {
+            // 1. Create User
             const user = await tx.user.create({
                 data: {
                     name,
@@ -66,6 +78,7 @@ export async function POST(request: NextRequest) {
                 }
             })
 
+            // 2. Create Provider
             const provider = await tx.provider.create({
                 data: {
                     userId: user.id,
@@ -79,33 +92,35 @@ export async function POST(request: NextRequest) {
                 }
             })
 
+            // 3. NEW: Create ProviderService entries
+            if (serviceIds && serviceIds.length > 0) {
+                await tx.providerService.createMany({
+                    data: serviceIds.map((serviceId: string) => ({
+                        providerId: provider.id,
+                        serviceId: serviceId,
+                        assignedBy: admin.userId,
+                        isActive: true,
+                    }))
+                })
+            }
+
             return { user, provider }
         })
 
-        // ✅ Send credentials via SMS
-        const smsMessage = `Welcome to HomeServ!\n\nYour provider account is ready.\n\nLogin: ${phone}\nPassword: ${plainPassword}\n\nLogin at: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/provider-login\n\nChange password after first login.`
-
+        // SMS credentials (console in dev)
         if (process.env.NODE_ENV === 'development') {
             console.log('\n📧 ========== PROVIDER CREDENTIALS ==========')
             console.log(`Name: ${name}`)
             console.log(`Phone: ${phone}`)
             console.log(`Password: ${plainPassword}`)
             console.log(`Login: ${process.env.NEXT_PUBLIC_APP_URL}/provider-login`)
+            console.log(`Services Assigned: ${serviceIds.length}`)
             console.log('==========================================\n')
-        } else {
-            try {
-                const smsProvider = getSMSProvider()
-                // Note: sendOTP is for OTP, you may need a general sendSMS method
-                // For now, we'll use console in production too
-                console.log('SMS would be sent:', smsMessage)
-            } catch (error) {
-                console.error('SMS send failed:', error)
-            }
         }
 
         return NextResponse.json({
             success: true,
-            message: 'Provider created successfully',
+            message: 'Provider created successfully with services',
             data: result
         })
 

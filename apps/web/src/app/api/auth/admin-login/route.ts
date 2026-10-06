@@ -1,3 +1,8 @@
+// apps/web/src/app/api/auth/admin-login/route.ts
+// CHANGE: Login response mein cookie set ki (Ops login jaisa)
+// WHY: Admin login mein bhi cookie set honi chahiye taaki middleware refresh par verify kar sake.
+//      Pehle sirf JSON mein token ja raha tha.
+
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateToken, createSession } from '@/lib/auth'
@@ -64,7 +69,8 @@ export async function POST(request: Request) {
     // Create session
     await createSession(user.id, token)
 
-    return NextResponse.json({
+    // CHANGE: Response with cookie
+    const response = NextResponse.json({
       success: true,
       message: 'Admin login successful',
       data: {
@@ -80,6 +86,18 @@ export async function POST(request: Request) {
         },
       },
     })
+
+    // CHANGE: Set token as cookie for middleware verification on refresh
+    response.cookies.set('token', token, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    return response
+
   } catch (error) {
     console.error('Admin Login Error:', error)
     return NextResponse.json(

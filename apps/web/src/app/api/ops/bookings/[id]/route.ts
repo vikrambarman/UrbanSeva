@@ -1,7 +1,7 @@
-// api/ops/bookings/[id]/route.ts
-// KYA: Single booking detail — ops portal ke liye
-// KYUN: Booking detail page pe sab info chahiye — customer, service, provider,
-//       address, payment, activity logs — sab ek saath
+// apps/web/src/app/api/ops/bookings/[id]/route.ts
+// CHANGE: Provider ki services list bhi include ki
+// CHANGE: Provider ka email bhi include kiya
+// WHY: Ops team ko provider ki complete details chahiye — services, email, etc.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -44,6 +44,7 @@ export async function GET(
                             select: {
                                 id: true,
                                 name: true,
+                                categoryId: true,
                                 category: {
                                     select: {
                                         id: true,
@@ -54,6 +55,7 @@ export async function GET(
                         }
                     }
                 },
+                // CHANGE: Provider with services and email
                 provider: {
                     select: {
                         id: true,
@@ -64,7 +66,28 @@ export async function GET(
                             select: {
                                 name: true,
                                 phone: true,
-                                email: true,
+                                email: true, // CHANGE: Email include kiya
+                            }
+                        },
+                        // CHANGE: Provider ki services list include ki
+                        services: {
+                            where: { isActive: true },
+                            select: {
+                                service: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        subCategory: {
+                                            select: {
+                                                category: {
+                                                    select: {
+                                                        name: true,
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -91,9 +114,6 @@ export async function GET(
                     orderBy: { createdAt: 'desc' },
                     take: 20,
                 },
-                // ═══════════════════════════════════════════════════════════════
-                // NEW: Assignment logs — kaunsa staff ne kya kiya
-                // ═══════════════════════════════════════════════════════════════
                 assignmentLogs: {
                     orderBy: { createdAt: 'desc' },
                     take: 50,
@@ -116,9 +136,7 @@ export async function GET(
             )
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // Category access check — staff sirf apni categories ki booking dekhe
-        // ═══════════════════════════════════════════════════════════════
+        // Category access check
         const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
         
         if (!isAdmin) {
@@ -137,6 +155,10 @@ export async function GET(
         return NextResponse.json({
             success: true,
             data: booking,
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, must-revalidate',
+            }
         })
 
     } catch (error) {

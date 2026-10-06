@@ -1,4 +1,9 @@
-// lib/api-client.ts
+// apps/web/src/lib/api-client.ts
+// CHANGE: credentials: 'include' default add kiya
+// CHANGE: 401 par redirect logic improve kiya (ops portal ke liye bhi)
+// WHY: Pehle API calls mein cookie nahi ja rahi thi, isliye middleware ko token nahi milta tha.
+//      Ab har request mein cookie automatically include hogi.
+
 export async function apiFetch(url: string, options: RequestInit = {}) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
     
@@ -19,9 +24,11 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
     }
     
     try {
+        // CHANGE: credentials: 'include' added by default
         const res = await fetch(url, { 
             ...options, 
-            headers 
+            headers,
+            credentials: 'include', // CHANGE: Ensure cookies are sent with every request
         })
         
         console.log('📡 Response:', {
@@ -34,10 +41,19 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
         if (res.status === 401) {
             console.error('🚫 Unauthorized!')
             localStorage.removeItem('token')
-            if (typeof window !== 'undefined' && !window.location.pathname.includes('/admin-login')) {
-                setTimeout(() => {
-                    window.location.href = '/admin-login'
-                }, 1000)
+            if (typeof window !== 'undefined') {
+                const currentPath = window.location.pathname
+                
+                // CHANGE: Ops portal ke liye alag redirect
+                if (currentPath.startsWith('/ops')) {
+                    setTimeout(() => {
+                        window.location.href = '/ops/login'
+                    }, 500)
+                } else if (!currentPath.includes('/admin-login') && !currentPath.includes('/login')) {
+                    setTimeout(() => {
+                        window.location.href = '/admin-login'
+                    }, 500)
+                }
             }
         }
         

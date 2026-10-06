@@ -1,12 +1,12 @@
-// app/ops/dashboard/page.tsx
-// KYA: Ops portal ka dashboard — stats cards + category-wise pending bookings
-// KYUN: Calling team member ko ek nazar mein poora overview mil jaye
-//       — kitni pending hain, aaj kya kya kiya, category-wise breakdown
+// apps/web/src/app/ops/dashboard/page.tsx
+// CHANGE: Redundant auth check useEffect hata diya (middleware handle karega)
+// CHANGE: Stats fetch mein cache: 'no-store' aur credentials: 'include' add kiya
+// WHY: Refresh par redirect ho raha tha kyunki Zustand hydration se pehle isAuthenticated false tha.
+//      Ab middleware handle karega auth, page sirf data fetch karega.
 
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,22 +39,23 @@ interface DashboardStats {
 }
 
 export default function OpsDashboardPage() {
-    const router = useRouter()
-    const { user, isAuthenticated } = useAuthStore()
+    const { user } = useAuthStore()
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [loading, setLoading] = useState(true)
 
+    // CHANGE: Auth check hata diya — middleware handle karega
     useEffect(() => {
-        if (!isAuthenticated) {
-            router.push('/ops/login')
-            return
-        }
         fetchStats()
-    }, [isAuthenticated, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const fetchStats = async () => {
         try {
-            const res = await apiFetch('/api/ops/bookings/stats')
+            // CHANGE: cache: 'no-store' aur credentials: 'include' add kiya
+            const res = await apiFetch('/api/ops/bookings/stats', {
+                cache: 'no-store',
+                credentials: 'include',
+            })
             const data = await res.json()
             if (data.success) {
                 setStats(data.data)

@@ -1,3 +1,9 @@
+// apps/web/src/app/admin/providers/[id]/page.tsx
+// CHANGE: "Assigned Services" tab mein Add/Remove/Edit functionality add ki
+// CHANGE: Modal for adding new services with category selection
+// CHANGE: Remove button for each service
+// WHY: Provider banne ke baad bhi services add/remove kar sake
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -7,9 +13,53 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, CheckCircle, XCircle, FileText, Star, Wallet, Briefcase } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter,
+    DialogHeader, DialogTitle
+} from "@/components/ui/dialog"
+import {
+    ArrowLeft, CheckCircle, XCircle, FileText, Star, Wallet, Briefcase,
+    Plus, Trash2, Edit, Wrench, Check
+} from "lucide-react"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api-client"
+
+interface Category {
+    id: string
+    name: string
+    slug: string
+}
+
+interface Service {
+    id: string
+    name: string
+    slug: string
+    image: string | null
+    basePrice: number
+}
+
+interface ProviderService {
+    id: string
+    customPrice: number | null
+    isActive: boolean
+    service: {
+        id: string
+        name: string
+        slug: string
+        image: string | null
+        basePrice: number
+        subCategory: {
+            name: string
+            category: {
+                name: string
+            }
+        }
+    }
+}
 
 export default function AdminProviderDetailPage() {
     const params = useParams()
@@ -17,6 +67,18 @@ export default function AdminProviderDetailPage() {
     const [provider, setProvider] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [commission, setCommission] = useState(0)
+
+    // Services management
+    const [providerServices, setProviderServices] = useState<ProviderService[]>([])
+    const [loadingServices, setLoadingServices] = useState(true)
+    const [addServiceModal, setAddServiceModal] = useState(false)
+    const [categories, setCategories] = useState<Category[]>([])
+    const [availableServices, setAvailableServices] = useState<Service[]>([])
+    const [selectedCategory, setSelectedCategory] = useState('')
+    const [selectedServices, setSelectedServices] = useState<string[]>([])
+    const [loadingCategories, setLoadingCategories] = useState(false)
+    const [loadingAvailableServices, setLoadingAvailableServices] = useState(false)
+    const [addingServices, setAddingServices] = useState(false)
 
     useEffect(() => {
         const fetchProvider = async () => {
@@ -47,7 +109,140 @@ export default function AdminProviderDetailPage() {
             }
         }
         fetchProvider()
+        fetchProviderServices()
     }, [params.id, router])
+
+    const fetchProviderServices = async () => {
+        setLoadingServices(true)
+        try {
+            const res = await apiFetch(`/api/admin/providers/${params.id}/services`)
+            const data = await res.json()
+            if (data.success) {
+                setProviderServices(data.data)
+            }
+        } catch (error) {
+            console.error('Failed to fetch services:', error)
+        } finally {
+            setLoadingServices(false)
+        }
+    }
+
+    const fetchCategories = async () => {
+        setLoadingCategories(true)
+        try {
+            const res = await apiFetch('/api/categories')
+            const data = await res.json()
+            if (data.success) {
+                setCategories(data.data)
+            }
+        } catch (error) {
+            console.error('Failed to fetch categories:', error)
+        } finally {
+            setLoadingCategories(false)
+        }
+    }
+
+    const fetchServicesForCategory = async (categoryId: string) => {
+        setLoadingAvailableServices(true)
+        try {
+            const res = await apiFetch(`/api/categories/${categoryId}`)
+            const data = await res.json()
+            if (data.success) {
+                const allServices: Service[] = []
+                data.data.subCategories?.forEach((subCat: any) => {
+                    subCat.services?.forEach((service: any) => {
+                        // Only show services not already assigned
+                        if (!providerServices.some(ps => ps.service.id === service.id)) {
+                            allServices.push({
+                                id: service.id,
+                                name: service.name,
+                                slug: service.slug,
+                                image: service.image,
+                                basePrice: service.basePrice
+                            })
+                        }
+                    })
+                })
+                setAvailableServices(allServices)
+            }
+        } catch (error) {
+            console.error('Failed to fetch services:', error)
+        } finally {
+            setLoadingAvailableServices(false)
+        }
+    }
+
+    const handleOpenAddServiceModal = () => {
+        setAddServiceModal(true)
+        setSelectedCategory('')
+        setSelectedServices([])
+        setAvailableServices([])
+        fetchCategories()
+    }
+
+    const handleCategoryChange = (categoryId: string) => {
+        setSelectedCategory(categoryId)
+        setSelectedServices([])
+        if (categoryId) {
+            fetchServicesForCategory(categoryId)
+        }
+    }
+
+    const toggleService = (serviceId: string) => {
+        setSelectedServices(prev =>
+            prev.includes(serviceId)
+                ? prev.filter(id => id !== serviceId)
+                : [...prev, serviceId]
+        )
+    }
+
+    const handleAddServices = async () => {
+        if (selectedServices.length === 0) {
+            toast.error('Please select at least one service')
+            return
+        }
+
+        setAddingServices(true)
+        try {
+            const res = await apiFetch(`/api/admin/providers/${params.id}/services`, {
+                method: 'POST',
+                body: JSON.stringify({ serviceIds: selectedServices })
+            })
+            const data = await res.json()
+            if (data.success) {
+                toast.success(data.message)
+                setAddServiceModal(false)
+                fetchProviderServices()
+            } else {
+                toast.error(data.error || 'Failed to add services')
+            }
+        } catch (error) {
+            console.error('Add services error:', error)
+            toast.error('Failed to add services')
+        } finally {
+            setAddingServices(false)
+        }
+    }
+
+    const handleRemoveService = async (serviceId: string) => {
+        if (!confirm('Are you sure you want to remove this service?')) return
+
+        try {
+            const res = await apiFetch(`/api/admin/providers/${params.id}/services?serviceId=${serviceId}`, {
+                method: 'DELETE'
+            })
+            const data = await res.json()
+            if (data.success) {
+                toast.success('Service removed')
+                fetchProviderServices()
+            } else {
+                toast.error(data.error || 'Failed to remove service')
+            }
+        } catch (error) {
+            console.error('Remove service error:', error)
+            toast.error('Failed to remove service')
+        }
+    }
 
     const handleApprove = async () => {
         try {
@@ -236,7 +431,9 @@ export default function AdminProviderDetailPage() {
             <Tabs defaultValue="documents" className="w-full">
                 <TabsList>
                     <TabsTrigger value="documents">Documents</TabsTrigger>
-                    <TabsTrigger value="services">Assigned Services</TabsTrigger>
+                    <TabsTrigger value="services">
+                        Assigned Services ({providerServices.length})
+                    </TabsTrigger>
                     <TabsTrigger value="earnings">Recent Earnings</TabsTrigger>
                     <TabsTrigger value="payouts">Recent Payouts</TabsTrigger>
                 </TabsList>
@@ -266,21 +463,69 @@ export default function AdminProviderDetailPage() {
 
                 <TabsContent value="services">
                     <Card>
-                        <CardHeader><CardTitle>Assigned Services ({provider.services.length})</CardTitle></CardHeader>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle>Assigned Services ({providerServices.length})</CardTitle>
+                            <Button size="sm" onClick={handleOpenAddServiceModal}>
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add Services
+                            </Button>
+                        </CardHeader>
                         <CardContent>
-                            {provider.services.length > 0 ? (
+                            {loadingServices ? (
                                 <div className="grid md:grid-cols-3 gap-4">
-                                    {provider.services.map((ps: any) => (
-                                        <div key={ps.id} className="flex items-center gap-3 p-3 border rounded-md">
-                                            {ps.service.image && <img src={ps.service.image} alt={ps.service.name} className="w-10 h-10 rounded object-cover" />}
-                                            <div>
-                                                <p className="font-medium text-sm">{ps.service.name}</p>
-                                                <p className="text-xs text-muted-foreground">Custom Price: ₹{ps.customPrice || 'Default'}</p>
+                                    {[...Array(6)].map((_, i) => (
+                                        <Skeleton key={i} className="h-20 w-full" />
+                                    ))}
+                                </div>
+                            ) : providerServices.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <Wrench className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                                    <p className="text-muted-foreground mb-4">No services assigned yet</p>
+                                    <Button onClick={handleOpenAddServiceModal}>
+                                        <Plus className="h-4 w-4 mr-1" />
+                                        Add Services
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="grid md:grid-cols-3 gap-4">
+                                    {providerServices.map((ps) => (
+                                        <div key={ps.id} className="flex items-start gap-3 p-4 border rounded-lg hover:border-primary/50 transition-all group">
+                                            {ps.service.image && (
+                                                <img 
+                                                    src={ps.service.image} 
+                                                    alt={ps.service.name} 
+                                                    className="w-12 h-12 rounded object-cover flex-shrink-0" 
+                                                />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-sm truncate">{ps.service.name}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {ps.service.subCategory.category.name}
+                                                </p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {ps.customPrice ? (
+                                                        <span className="text-xs font-medium text-primary">
+                                                            Custom: ₹{ps.customPrice}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            Default: ₹{ps.service.basePrice}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                                                onClick={() => handleRemoveService(ps.service.id)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                     ))}
                                 </div>
-                            ) : <p className="text-muted-foreground">No services assigned yet.</p>}
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -289,7 +534,7 @@ export default function AdminProviderDetailPage() {
                     <Card>
                         <CardHeader><CardTitle>Recent Earnings</CardTitle></CardHeader>
                         <CardContent>
-                            {provider.earnings.length > 0 ? (
+                            {provider.earnings?.length > 0 ? (
                                 <div className="space-y-2">
                                     {provider.earnings.map((e: any) => (
                                         <div key={e.id} className="flex justify-between p-3 border rounded-md">
@@ -310,7 +555,7 @@ export default function AdminProviderDetailPage() {
                     <Card>
                         <CardHeader><CardTitle>Recent Payouts</CardTitle></CardHeader>
                         <CardContent>
-                            {provider.payouts.length > 0 ? (
+                            {provider.payouts?.length > 0 ? (
                                 <div className="space-y-2">
                                     {provider.payouts.map((p: any) => (
                                         <div key={p.id} className="flex justify-between p-3 border rounded-md">
@@ -327,6 +572,134 @@ export default function AdminProviderDetailPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Add Services Modal */}
+            <Dialog open={addServiceModal} onOpenChange={setAddServiceModal}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Add Services to Provider</DialogTitle>
+                        <DialogDescription>
+                            Select category and choose services to assign
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {/* Category Selection */}
+                        <div className="space-y-2">
+                            <Label>Service Category</Label>
+                            {loadingCategories ? (
+                                <Skeleton className="h-10 w-full" />
+                            ) : (
+                                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a category" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {categories.map((cat) => (
+                                            <SelectItem key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        </div>
+
+                        {/* Services Selection */}
+                        {selectedCategory && (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <Label>Available Services</Label>
+                                    {availableServices.length > 0 && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                if (selectedServices.length === availableServices.length) {
+                                                    setSelectedServices([])
+                                                } else {
+                                                    setSelectedServices(availableServices.map(s => s.id))
+                                                }
+                                            }}
+                                        >
+                                            {selectedServices.length === availableServices.length ? 'Deselect All' : 'Select All'}
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {loadingAvailableServices ? (
+                                    <div className="space-y-2">
+                                        {[...Array(4)].map((_, i) => (
+                                            <Skeleton key={i} className="h-14 w-full" />
+                                        ))}
+                                    </div>
+                                ) : availableServices.length === 0 ? (
+                                    <div className="text-center py-6 border rounded-lg">
+                                        <p className="text-sm text-muted-foreground">
+                                            No services available or all services already assigned
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-3">
+                                        {availableServices.map((service) => (
+                                            <div
+                                                key={service.id}
+                                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                                    selectedServices.includes(service.id)
+                                                        ? 'border-primary bg-primary/5'
+                                                        : 'hover:bg-muted'
+                                                }`}
+                                                onClick={() => toggleService(service.id)}
+                                            >
+                                                <Checkbox
+                                                    checked={selectedServices.includes(service.id)}
+                                                    onCheckedChange={() => toggleService(service.id)}
+                                                />
+                                                {service.image && (
+                                                    <img
+                                                        src={service.image}
+                                                        alt={service.name}
+                                                        className="h-10 w-10 rounded object-cover flex-shrink-0"
+                                                    />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{service.name}</p>
+                                                    <p className="text-xs text-muted-foreground">Base Price: ₹{service.basePrice}</p>
+                                                </div>
+                                                {selectedServices.includes(service.id) && (
+                                                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {selectedServices.length > 0 && (
+                                    <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
+                                        <Check className="h-4 w-4 text-primary" />
+                                        <p className="text-sm font-medium text-primary">
+                                            {selectedServices.length} service(s) selected
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAddServiceModal(false)}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleAddServices} 
+                            disabled={addingServices || selectedServices.length === 0}
+                        >
+                            {addingServices ? 'Adding...' : `Add ${selectedServices.length} Service(s)`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

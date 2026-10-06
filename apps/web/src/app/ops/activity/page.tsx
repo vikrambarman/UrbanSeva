@@ -1,16 +1,16 @@
-// app/ops/activity/page.tsx
-// KYA: Activity log page — staff ne kya kya actions liye
-// KYUN: Accountability aur tracking ke liye
+// apps/web/src/app/ops/activity/page.tsx
+// CHANGE: Redundant auth check useEffect hata diya (middleware handle karega)
+// CHANGE: Activity fetch mein cache: 'no-store' aur credentials: 'include' add kiya
+// WHY: Refresh par redirect ho raha tha kyunki Zustand hydration se pehle isAuthenticated false tha.
+//      Ab middleware handle karega auth, page sirf data fetch karega.
 
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Activity, UserPlus, CalendarClock, XCircle, FileText } from "lucide-react"
 import { apiFetch } from "@/lib/api-client"
-import { useAuthStore } from "@/store/authStore"
 import Link from "next/link"
 
 interface ActivityLog {
@@ -36,22 +36,22 @@ const actionConfig: Record<string, { label: string; icon: React.ElementType; col
 }
 
 export default function OpsActivityPage() {
-    const router = useRouter()
-    const { isAuthenticated } = useAuthStore()
     const [logs, setLogs] = useState<ActivityLog[]>([])
     const [loading, setLoading] = useState(true)
 
+    // CHANGE: Auth check hata diya — middleware handle karega
     useEffect(() => {
-        if (!isAuthenticated) {
-            router.push('/ops/login')
-            return
-        }
         fetchActivity()
-    }, [isAuthenticated, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const fetchActivity = async () => {
         try {
-            const res = await apiFetch('/api/ops/activity')
+            // CHANGE: cache: 'no-store' aur credentials: 'include' add kiya
+            const res = await apiFetch('/api/ops/activity', {
+                cache: 'no-store',
+                credentials: 'include',
+            })
             const data = await res.json()
             if (data.success) {
                 setLogs(data.data)

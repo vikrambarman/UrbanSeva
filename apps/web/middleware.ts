@@ -1,8 +1,7 @@
-// middleware.ts
-// CHANGE: /ops/* routes ke liye protection add ki
-// CHANGE: /ops/login ko public routes mein add kiya
-// CHANGE: /api/ops/* ko bhi protect kiya (sirf token check, role check API level pe hoga)
-// WHY: Calling team portal ko unauthorized access se bachana hai
+// apps/web/src/middleware.ts
+// CHANGE: Debug logs add kiye cookie verification ke liye
+// CHANGE: /api/ops/* routes ko bhi ops protection mein add kiya
+// WHY: Refresh par login redirect ho raha tha. Ab console mein dikhega ki cookie mil rahi hai ya nahi.
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
@@ -27,23 +26,36 @@ export function middleware(request: NextRequest) {
   // NEW: Ops portal routes — /ops/* (except /ops/login)
   // ═══════════════════════════════════════════════════════════════
   if (pathname.startsWith('/ops')) {
-    const token = request.cookies.get('token')?.value || 
-                  request.headers.get('authorization')?.replace('Bearer ', '')
+    // CHANGE: Debug logs for cookie verification
+    const tokenFromCookie = request.cookies.get('token')?.value
+    const tokenFromHeader = request.headers.get('authorization')?.replace('Bearer ', '')
+    const token = tokenFromCookie || tokenFromHeader
+
+    console.log('🔍 Ops Middleware Debug:')
+    console.log('  - Pathname:', pathname)
+    console.log('  - Token from cookie:', tokenFromCookie ? '✅ Present' : '❌ Missing')
+    console.log('  - Token from header:', tokenFromHeader ? '✅ Present' : '❌ Missing')
 
     if (!token) {
+      console.log('  ⚠️ No token found, redirecting to /ops/login')
       return NextResponse.redirect(new URL('/ops/login', request.url))
     }
 
     const payload = verifyToken(token)
+    console.log('  - Token verification:', payload ? '✅ Valid' : '❌ Invalid')
+
     if (!payload) {
+      console.log('  ⚠️ Invalid token, redirecting to /ops/login')
       return NextResponse.redirect(new URL('/ops/login', request.url))
     }
 
     // Sirf CALLING_TEAM, ADMIN, SUPER_ADMIN access kar sakte hain
     if (payload.role !== 'CALLING_TEAM' && payload.role !== 'ADMIN' && payload.role !== 'SUPER_ADMIN') {
+      console.log('  ⚠️ Invalid role:', payload.role, '- redirecting to /login')
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
+    console.log('  ✅ Access granted for role:', payload.role)
     return NextResponse.next()
   }
 

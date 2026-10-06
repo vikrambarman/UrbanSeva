@@ -1,8 +1,8 @@
-// app/ops/layout.tsx
-// CHANGE: Mounted state completely remove kiya — hydration mismatch fix
-// CHANGE: Login page check useEffect mein karo, conditional rendering nahi
-// CHANGE: h-dvh use kiya
-// WHY: Same reason — server aur client pe same HTML render hona chahiye
+// apps/web/src/app/ops/layout.tsx
+// CHANGE: Auth check completely hata diya layout se (Admin layout jaisa)
+// CHANGE: Sirf data-layout attribute set karna hai, baaki middleware handle karega
+// WHY: Admin layout mein koi auth check nahi hai, sirf middleware handle karta hai.
+//      Ops layout mein bhi same pattern follow karenge — no client-side auth redirect.
 
 "use client"
 
@@ -17,7 +17,7 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
 
     // ═══════════════════════════════════════════════════════════════
-    // Body attribute manage karo — login page ke alawa
+    // Body pe data-layout attribute set karo — CSS ke liye
     // ═══════════════════════════════════════════════════════════════
     useEffect(() => {
         const isLoginPage = pathname === '/ops/login'
@@ -31,10 +31,8 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
         }
     }, [pathname])
 
-    // ══════════════════════════════════════════════════════════════
-    // FIXED: No conditional rendering based on pathname
-    // Login page pe bhi same structure render karo, sidebar/topbar
-    // pathname check karke hide karo
+    // ═══════════════════════════════════════════════════════════════
+    // Login page — no sidebar/topbar
     // ═══════════════════════════════════════════════════════════════
     const isLoginPage = pathname === '/ops/login'
 
@@ -47,6 +45,9 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
         )
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Main layout — sidebar + topbar (NO auth check — middleware handles it)
+    // ═══════════════════════════════════════════════════════════════
     return (
         <div className="flex h-dvh overflow-hidden bg-muted/40">
             {/* Sidebar */}

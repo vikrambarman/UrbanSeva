@@ -1,12 +1,13 @@
-// app/ops/bookings/page.tsx
-// KYA: Bookings list page — filters + table + quick actions
-// KYUN: Calling team member yahan se bookings manage karega
-//       — assign provider, reschedule, cancel — sab yahan se
+// apps/web/src/app/ops/bookings/page.tsx
+// CHANGE: apiFetch calls mein cache: 'no-store' add kiya
+// CHANGE: Redundant auth check useEffect hata diya (middleware handle karega)
+// WHY: Admin side se edit karne par Ops panel mein data update nahi ho raha tha
+//      kyunki Next.js fetch cache ho jata tha. Ab har request fresh fetch hogi.
 
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,6 @@ import {
     XCircle, Truck, Wrench, AlertCircle
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-client"
-import { useAuthStore } from "@/store/authStore"
 import Link from "next/link"
 
 interface Booking {
@@ -81,9 +81,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
 }
 
 export default function OpsBookingsPage() {
-    const router = useRouter()
     const searchParams = useSearchParams()
-    const { isAuthenticated } = useAuthStore()
 
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
@@ -99,15 +97,6 @@ export default function OpsBookingsPage() {
     const [total, setTotal] = useState(0)
 
     // ═══════════════════════════════════════════════════════════════
-    // Auth check
-    // ═══════════════════════════════════════════════════════════════
-    useEffect(() => {
-        if (!isAuthenticated) {
-            router.push('/ops/login')
-        }
-    }, [isAuthenticated, router])
-
-    // ═══════════════════════════════════════════════════════════════
     // Fetch bookings
     // ═══════════════════════════════════════════════════════════════
     const fetchBookings = useCallback(async () => {
@@ -120,7 +109,11 @@ export default function OpsBookingsPage() {
             if (categoryFilter) params.set('categoryId', categoryFilter)
             if (search) params.set('search', search)
 
-            const res = await apiFetch(`/api/ops/bookings?${params.toString()}`)
+            // CHANGE: cache: 'no-store' added to prevent Next.js caching
+            const res = await apiFetch(`/api/ops/bookings?${params.toString()}`, {
+                cache: 'no-store',
+                credentials: 'include',
+            })
             const data = await res.json()
 
             if (data.success) {
@@ -393,7 +386,7 @@ export default function OpsBookingsPage() {
                                                     {formatDate(booking.scheduledDate)} • {booking.scheduledTime}
                                                 </span>
                                                 <span>
-                                                    {booking.provider ? `👤 ${booking.provider.user.name}` : '⚠️ Unassigned'}
+                                                    {booking.provider ? `Provider: ${booking.provider.user.name}` : 'Unassigned'}
                                                 </span>
                                             </div>
                                         </div>
