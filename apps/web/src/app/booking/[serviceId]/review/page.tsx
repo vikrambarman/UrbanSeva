@@ -36,8 +36,6 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true)
 
   const totalAmount = getTotalAmount()
-  const gst = totalAmount * 0.18
-  const finalTotal = totalAmount + gst
 
   // Auth check
   useEffect(() => {
@@ -149,11 +147,10 @@ export default function ReviewPage() {
             ].map((step, idx) => (
               <div key={step.num} className="flex items-center">
                 <div
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full ${
-                    step.active
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full ${step.active
                       ? 'bg-primary text-white'
                       : 'bg-muted text-muted-foreground'
-                  }`}
+                    }`}
                 >
                   <span className="text-sm font-medium">{step.num}</span>
                   <span className="text-sm font-medium hidden sm:inline">{step.label}</span>
@@ -263,15 +260,18 @@ export default function ReviewPage() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₹{totalAmount.toFixed(0)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">GST (18%)</span>
-                    <span>₹{gst.toFixed(0)}</span>
-                  </div>
+                  {/* Deleted:                  <div className="flex justify-between"> */}
+                  {/* Deleted:                    <span className="text-muted-foreground">GST (18%)</span> */}
+                  {/* Deleted:                    <span>₹{gst.toFixed(0)}</span> */}
+                  {/* Deleted:                  </div> */}
                   <div className="border-t pt-2">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span className="text-primary">₹{finalTotal.toFixed(0)}</span>
+                      <span className="text-primary">₹{totalAmount.toFixed(0)}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      (Inclusive of all taxes)
+                    </p>
                   </div>
                 </div>
 

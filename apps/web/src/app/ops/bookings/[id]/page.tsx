@@ -48,6 +48,18 @@ interface BookingDetail {
     specialInstructions: string | null
     cancelReason: string | null
     createdAt: string
+    
+    // ═══════════════════════════════
+    // NEW: Payment Fields
+    // ═══════════════════════════════
+    paymentMethod: string | null  // "ONLINE" | "POD" | "COD"
+    paymentStatus: string | null  // "PENDING" | "PAID" | "FAILED"
+    razorpayPaymentLinkUrl: string | null
+    codAmountCollected: number | null
+    codVerifiedBy: string | null
+    codVerifiedAt: string | null
+    gstAmount: number
+    
     user: { id: string; name: string | null; phone: string; email: string | null }
     service: {
         id: string; name: string; image: string | null; basePrice: number
@@ -108,6 +120,10 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
     CANCELLED_BY_CUSTOMER: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
     CANCELLED_BY_OPS: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
     CANCELLED_BY_PROVIDER: { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+
+    // NEW: POD Payment statuses
+    POD_PAYMENT_PENDING: { label: 'POD Payment Pending', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: CreditCard },
+    POD_PAYMENT_RECEIVED: { label: 'POD Payment Received', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
 }
 
 
@@ -586,8 +602,8 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                                 )}
                                                 {log.notes && (
                                                     <p className={`text-xs mt-1 p-2 rounded ${log.action === 'NOTE_ADDED'
-                                                            ? 'bg-amber-50 border border-amber-200 text-amber-800'
-                                                            : 'bg-muted'
+                                                        ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                                                        : 'bg-muted'
                                                         }`}>
                                                         {log.notes}
                                                     </p>
@@ -757,22 +773,52 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                         {booking.totalAmount}
                                     </span>
                                 </div>
-                                {booking.payment && (
-                                    <div className="mt-3 pt-3 border-t">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Status</span>
-                                            <Badge variant={booking.payment.status === 'PAID' ? 'default' : 'secondary'} className="text-xs">
-                                                {booking.payment.status}
-                                            </Badge>
-                                        </div>
-                                        {booking.payment.method && (
-                                            <div className="flex justify-between text-sm mt-1">
-                                                <span className="text-muted-foreground">Method</span>
-                                                <span>{booking.payment.method}</span>
-                                            </div>
-                                        )}
+
+                                {/* Payment Method Badge */}
+                                <div className="mt-3 pt-3 border-t">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Method</span>
+                                        <Badge variant={
+                                            booking.paymentMethod === 'ONLINE' ? 'default' :
+                                                booking.paymentMethod === 'POD' ? 'secondary' : 'outline'
+                                        }>
+                                            {booking.paymentMethod === 'ONLINE' ? 'Online' :
+                                                booking.paymentMethod === 'POD' ? 'POD' :
+                                                    booking.paymentMethod === 'COD' ? 'COD' : 'N/A'}
+                                        </Badge>
                                     </div>
-                                )}
+
+                                    {/* Payment Status */}
+                                    <div className="flex justify-between text-sm mt-2">
+                                        <span className="text-muted-foreground">Status</span>
+                                        <Badge variant={booking.paymentStatus === 'PAID' ? 'default' : 'secondary'} className="text-xs">
+                                            {booking.paymentStatus === 'PAID' ? '✓ Paid' : '⏳ Pending'}
+                                        </Badge>
+                                    </div>
+
+                                    {/* POD Payment Link Info */}
+                                    {(booking.paymentMethod === 'POD' || booking.paymentMethod === 'COD') && booking.razorpayPaymentLinkUrl && (
+                                        <div className="mt-3 p-2 bg-muted rounded-lg">
+                                            <p className="text-xs text-muted-foreground mb-1">Payment Link:</p>
+                                            <a
+                                                href={booking.razorpayPaymentLinkUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-primary hover:underline truncate block"
+                                            >
+                                                {booking.razorpayPaymentLinkUrl}
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {/* COD Amount Collected */}
+                                    {booking.codAmountCollected && (
+                                        <div className="flex justify-between text-sm mt-2 text-green-600">
+                                            <span>Collected</span>
+                                            <span>₹{booking.codAmountCollected}</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -860,8 +906,8 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
                                     <div
                                         key={p.id}
                                         className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedProvider === p.id
-                                                ? 'border-primary bg-primary/5 ring-2 ring-primary'
-                                                : 'hover:bg-muted hover:border-primary/50'
+                                            ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                                            : 'hover:bg-muted hover:border-primary/50'
                                             } ${!p.isAvailable ? 'opacity-70' : ''}`}
                                         onClick={() => p.isAvailable && setSelectedProvider(p.id)}
                                     >

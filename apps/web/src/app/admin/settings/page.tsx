@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
-import { Save, Building2, DollarSign, Bell } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Save, Building2, DollarSign, Bell, Percent, Hash } from "lucide-react"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api-client"
 
@@ -23,8 +24,13 @@ export default function AdminSettingsPage() {
 
     // Financial State
     const [defaultCommission, setDefaultCommission] = useState("20")
+    const [commissionType, setCommissionType] = useState("PERCENTAGE") // PERCENTAGE or FIXED
     const [minPayout, setMinPayout] = useState("500")
     const [walletEnabled, setWalletEnabled] = useState(true)
+    const [razorpayFeeBearer, setRazorpayFeeBearer] = useState("COMPANY") // COMPANY or PROVIDER
+    const [razorpayFeePercentage, setRazorpayFeePercentage] = useState("2")
+    const [autoSettlePOD, setAutoSettlePOD] = useState(false)
+    const [podSettlementDays, setPodSettlementDays] = useState("7")
 
     // Notifications State
     const [smsEnabled, setSmsEnabled] = useState(true)
@@ -43,8 +49,13 @@ export default function AdminSettingsPage() {
                     setAddress(s.PLATFORM_ADDRESS || "")
                     
                     setDefaultCommission(s.DEFAULT_COMMISSION || "20")
+                    setCommissionType(s.COMMISSION_TYPE || "PERCENTAGE")
                     setMinPayout(s.MIN_PAYOUT_AMOUNT || "500")
                     setWalletEnabled(s.WALLET_ENABLED !== "false")
+                    setRazorpayFeeBearer(s.RAZORPAY_FEE_BEARER || "COMPANY")
+                    setRazorpayFeePercentage(s.RAZORPAY_FEE_PERCENTAGE || "2")
+                    setAutoSettlePOD(s.AUTO_SETTLE_POD === "true")
+                    setPodSettlementDays(s.POD_SETTLEMENT_DAYS || "7")
                     
                     setSmsEnabled(s.SMS_ENABLED !== "false")
                     setOtpProvider(s.OTP_PROVIDER || "MSG91")
@@ -67,8 +78,13 @@ export default function AdminSettingsPage() {
                     SUPPORT_PHONE: supportPhone,
                     PLATFORM_ADDRESS: address,
                     DEFAULT_COMMISSION: defaultCommission,
+                    COMMISSION_TYPE: commissionType,
                     MIN_PAYOUT_AMOUNT: minPayout,
                     WALLET_ENABLED: walletEnabled.toString(),
+                    RAZORPAY_FEE_BEARER: razorpayFeeBearer,
+                    RAZORPAY_FEE_PERCENTAGE: razorpayFeePercentage,
+                    AUTO_SETTLE_POD: autoSettlePOD.toString(),
+                    POD_SETTLEMENT_DAYS: podSettlementDays,
                     SMS_ENABLED: smsEnabled.toString(),
                     OTP_PROVIDER: otpProvider,
                 })
@@ -131,22 +147,122 @@ export default function AdminSettingsPage() {
                     </Card>
                 </TabsContent>
 
-                {/* Financial Tab */}
-                <TabsContent value="financial">
+                {/* Financial Tab - ENHANCED */}
+                <TabsContent value="financial" className="space-y-6">
+                    {/* Commission Settings */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Financial Configuration</CardTitle>
-                            <CardDescription>Default commission rates and payout limits.</CardDescription>
+                            <CardTitle>Commission Configuration</CardTitle>
+                            <CardDescription>How provider earnings are calculated.</CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Default Commission (%)</Label>
-                                    <Input type="number" value={defaultCommission} onChange={(e) => setDefaultCommission(e.target.value)} />
+                                    <Label>Commission Type</Label>
+                                    <Select value={commissionType} onValueChange={setCommissionType}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="PERCENTAGE">
+                                                <div className="flex items-center gap-2">
+                                                    <Percent className="h-4 w-4" />
+                                                    Percentage (%)
+                                                </div>
+                                            </SelectItem>
+                                            <SelectItem value="FIXED">
+                                                <div className="flex items-center gap-2">
+                                                    <Hash className="h-4 w-4" />
+                                                    Fixed Amount (₹)
+                                                </div>
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-2">
+                                    <Label>
+                                        {commissionType === 'PERCENTAGE' ? 'Commission Rate (%)' : 'Fixed Commission (₹)'}
+                                    </Label>
+                                    <Input 
+                                        type="number" 
+                                        value={defaultCommission} 
+                                        onChange={(e) => setDefaultCommission(e.target.value)}
+                                        placeholder={commissionType === 'PERCENTAGE' ? 'e.g., 20' : 'e.g., 100'}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        {commissionType === 'PERCENTAGE' 
+                                            ? 'Provider gets (100 - commission)% of base amount'
+                                            : 'Provider gets (base amount - fixed commission)'
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Payment Gateway Settings */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Payment Gateway Settings</CardTitle>
+                            <CardDescription>Razorpay fee configuration.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Razorpay Fee Bearer</Label>
+                                    <Select value={razorpayFeeBearer} onValueChange={setRazorpayFeeBearer}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="COMPANY">Company (Platform bears the cost)</SelectItem>
+                                            <SelectItem value="PROVIDER">Provider (Deducted from earnings)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Razorpay Fee (%)</Label>
+                                    <Input 
+                                        type="number" 
+                                        value={razorpayFeePercentage} 
+                                        onChange={(e) => setRazorpayFeePercentage(e.target.value)}
+                                        placeholder="e.g., 2"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Typical Razorpay fee is 2% per transaction
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Payout Settings */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Payout Configuration</CardTitle>
+                            <CardDescription>Minimum payout and POD settlement rules.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
                                     <Label>Minimum Payout Amount (₹)</Label>
-                                    <Input type="number" value={minPayout} onChange={(e) => setMinPayout(e.target.value)} />
+                                    <Input 
+                                        type="number" 
+                                        value={minPayout} 
+                                        onChange={(e) => setMinPayout(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>POD Auto-Settlement (Days)</Label>
+                                    <Input 
+                                        type="number" 
+                                        value={podSettlementDays} 
+                                        onChange={(e) => setPodSettlementDays(e.target.value)}
+                                        placeholder="e.g., 7"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        POD earnings auto-settle after X days
+                                    </p>
                                 </div>
                             </div>
                             <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -155,6 +271,13 @@ export default function AdminSettingsPage() {
                                     <p className="text-sm text-muted-foreground">Allow customers to use wallet balance for bookings.</p>
                                 </div>
                                 <Switch checked={walletEnabled} onCheckedChange={setWalletEnabled} />
+                            </div>
+                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                                <div>
+                                    <Label>Auto-Settle POD Earnings</Label>
+                                    <p className="text-sm text-muted-foreground">Automatically settle POD earnings after configured days.</p>
+                                </div>
+                                <Switch checked={autoSettlePOD} onCheckedChange={setAutoSettlePOD} />
                             </div>
                         </CardContent>
                     </Card>

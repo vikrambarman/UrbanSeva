@@ -1,3 +1,8 @@
+/**
+ * WHAT: Provider earnings with POD vs Online breakdown
+ * WHY: Provider ko clear picture mile ki online vs POD se kitna kamaya
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderUser } from '@/lib/auth'
@@ -18,26 +23,35 @@ export async function GET(request: NextRequest) {
         if (period === 'week') dateFilter = { createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } }
         else if (period === 'month') dateFilter = { createdAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) } }
 
-        const [earnings, stats] = await Promise.all([
+        const [earnings, stats, onlineStats, podStats, pendingAmount] = await Promise.all([
+            // All earnings
             db.providerEarning.findMany({
                 where: { providerId: provider.id, ...dateFilter },
                 orderBy: { createdAt: 'desc' },
-                take: 20,
-                include: {
-                    provider: { select: { commissionRate: true } }
-                }
+                take: 50,
             }),
+            // Total stats
             db.providerEarning.aggregate({
                 where: { providerId: provider.id, ...dateFilter },
                 _sum: { gross: true, commission: true, net: true },
                 _count: true
+            }),
+            // Online earnings stats
+            db.providerEarning.aggregate({
+                where: { providerId: provider.id, ...dateFilter, paymentMethod: 'ONLINE' },
+                _sum: { net: true },
+            }),
+            // POD earnings stats
+            db.providerEarning.aggregate({
+                where: { providerId: provider.id, ...dateFilter, paymentMethod: 'POD' },
+                _sum: { net: true },
+            }),
+            // Pending payout amount (SETTLED status only)
+            db.providerEarning.aggregate({
+                where: { providerId: provider.id, status: { in: ['SETTLED', 'PENDING'] } },
+                _sum: { net: true }
             })
         ])
-
-        const pendingAmount = await db.providerEarning.aggregate({
-            where: { providerId: provider.id, status: 'PENDING' },
-            _sum: { net: true }
-        })
 
         return NextResponse.json({
             success: true,
@@ -48,6 +62,8 @@ export async function GET(request: NextRequest) {
                     totalCommission: stats._sum.commission || 0,
                     totalNet: stats._sum.net || 0,
                     totalJobs: stats._count,
+                    onlineNet: onlineStats._sum.net || 0,
+                    podNet: podStats._sum.net || 0,
                     pendingPayout: pendingAmount._sum.net || 0
                 }
             }

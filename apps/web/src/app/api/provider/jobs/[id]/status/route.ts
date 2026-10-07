@@ -1,16 +1,54 @@
 /**
- * WHAT: Provider job status update with COD payment handling (FIXED)
+ * WHAT: Provider job status update with POD/Online payment handling
  * WHY: 
- * - Fixed provider.user access (include user relation)
- * - Fixed paymentMethod variable scope
- * - ONLINE: Payment already received, earning auto-created
- * - COD: Provider confirms collection, OPS verifies later
+ * - POD earnings alag track honge (paymentMethod: 'POD')
+ * - Online earnings auto-settle honge (paymentMethod: 'ONLINE')
+ * - Commission calculation admin settings se aayega (percentage/fixed)
+ * - GST breakdown accounting ke liye save hoga
+ * NOTE: Provider "Collect Payment" button dabayega POD ke liye (Phase 4 mein)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderUser } from '@/lib/auth'
 import { sendNotification } from '@/lib/notifications'
+
+// Helper: Fetch admin settings
+async function getAdminSettings() {
+    const settings = await db.appSetting.findMany()
+    const formatted = settings.reduce((acc, curr) => {
+        acc[curr.key] = curr.value
+        return acc
+    }, {} as Record<string, string>)
+    return formatted
+}
+
+// Helper: Calculate commission based on admin settings
+function calculateCommission(
+    baseAmount: number, 
+    providerCommissionRate: number,
+    settings: Record<string, string>
+): { commission: number; net: number } {
+    const commissionType = settings.COMMISSION_TYPE || 'PERCENTAGE'
+    const defaultCommission = parseFloat(settings.DEFAULT_COMMISSION || '20')
+    
+    // Use provider-specific rate if set, otherwise use default
+    const rate = providerCommissionRate > 0 ? providerCommissionRate : defaultCommission
+    
+    let commission: number
+    
+    if (commissionType === 'FIXED') {
+        // Fixed amount commission
+        commission = rate
+    } else {
+        // Percentage commission
+        commission = baseAmount * (rate / 100)
+    }
+    
+    const net = baseAmount - commission
+    
+    return { commission, net }
+}
 
 export async function POST(
     request: NextRequest,
@@ -23,7 +61,7 @@ export async function POST(
         const provider = await db.provider.findUnique({ 
             where: { userId: providerAuth.userId },
             include: {
-                user: { select: { name: true } } // FIX: Include user relation
+                user: { select: { name: true } }
             }
         })
         if (!provider) return NextResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
@@ -36,15 +74,27 @@ export async function POST(
             where: { id },
             include: {
                 user: { select: { id: true, name: true, phone: true } },
-                service: { select: { name: true } },
+                service: { 
+                    select: { 
+                        name: true,
+                        subCategory: {
+                            include: {
+                                category: true
+                            }
+                        }
+                    }
+                },
             }
         })
         if (!booking) return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 })
 
+        // Fetch admin settings for commission calculation
+        const settings = await getAdminSettings()
+
         let newStatus = booking.status
         let updateData: any = {}
         
-        // FIX: Define paymentMethod at function scope
+        // Define paymentMethod at function scope
         const paymentMethod = booking.paymentMethod || 'ONLINE'
 
         switch (action) {
@@ -94,13 +144,23 @@ export async function POST(
                 updateData.completedAt = new Date()
                 if (photos) updateData.afterPhotos = photos
 
-                if (paymentMethod === 'COD') {
+                // ═══════════════════════════════
+                // EARNING CALCULATION (ENHANCED)
+                // ═══════════════════════════════
+                
+                if (paymentMethod === 'POD' || paymentMethod === 'COD') {
+                    // POD/COD: Provider confirms collection, OPS verifies later
                     const collectedAmount = codAmountCollected || booking.totalAmount
                     updateData.codAmountCollected = collectedAmount
                     
-                    const commission = collectedAmount * (provider.commissionRate / 100)
-                    const net = collectedAmount - commission
+                    // Calculate commission using admin settings
+                    const { commission, net } = calculateCommission(
+                        collectedAmount,
+                        provider.commissionRate,
+                        settings
+                    )
                     
+                    // Create earning with PENDING_VERIFICATION status
                     await db.providerEarning.create({
                         data: {
                             providerId: provider.id,
@@ -108,13 +168,21 @@ export async function POST(
                             gross: collectedAmount,
                             commission,
                             net,
-                            status: 'PENDING_VERIFICATION'
+                            status: 'PENDING_VERIFICATION',
+                            paymentMethod: 'POD', // Track as POD
+                            collectedAmount: collectedAmount,
+                            collectedAt: new Date(),
                         }
                     })
                 } else {
-                    const commission = booking.totalAmount * (provider.commissionRate / 100)
-                    const net = booking.totalAmount - commission
+                    // ONLINE: Payment already received, earning auto-settled
+                    const { commission, net } = calculateCommission(
+                        booking.totalAmount,
+                        provider.commissionRate,
+                        settings
+                    )
                     
+                    // Create earning with SETTLED status (auto-settled for online)
                     await db.providerEarning.create({
                         data: {
                             providerId: provider.id,
@@ -122,20 +190,28 @@ export async function POST(
                             gross: booking.totalAmount,
                             commission,
                             net,
-                            status: 'SETTLED'
+                            status: 'SETTLED',
+                            paymentMethod: 'ONLINE', // Track as ONLINE
+                            settledAt: new Date(),
                         }
                     })
 
+                    // Update payment status
                     await db.payment.updateMany({
                         where: { bookingId: booking.id },
                         data: { status: 'PAID' }
                     })
                 }
 
+                // Update provider stats
                 await db.provider.update({
                     where: { id: provider.id },
                     data: {
                         totalJobs: { increment: 1 },
+                        totalEarnings: { increment: paymentMethod === 'POD' || paymentMethod === 'COD' 
+                            ? (codAmountCollected || booking.totalAmount) - calculateCommission(codAmountCollected || booking.totalAmount, provider.commissionRate, settings).commission
+                            : booking.totalAmount - calculateCommission(booking.totalAmount, provider.commissionRate, settings).commission
+                        },
                         currentWorkStatus: 'AVAILABLE',
                         currentJobId: null
                     }
@@ -186,8 +262,7 @@ export async function POST(
             data: {
                 bookingId: id,
                 status: newStatus,
-                // FIX: Use paymentMethod from outer scope
-                note: `Action: ${action} by provider${action === 'complete' && paymentMethod === 'COD' ? ` (COD: ₹${codAmountCollected || booking.totalAmount})` : ''}`,
+                note: `Action: ${action} by provider${action === 'complete' && (paymentMethod === 'POD' || paymentMethod === 'COD') ? ` (${paymentMethod}: ₹${codAmountCollected || booking.totalAmount})` : ''}`,
                 changedBy: providerAuth.userId
             }
         })
@@ -195,9 +270,8 @@ export async function POST(
         return NextResponse.json({ 
             success: true, 
             data: updatedBooking,
-            // FIX: Use paymentMethod from outer scope
-            message: action === 'complete' && paymentMethod === 'COD' 
-                ? 'Service completed. COD amount pending OPS verification.' 
+            message: action === 'complete' && (paymentMethod === 'POD' || paymentMethod === 'COD')
+                ? 'Service completed. POD amount pending OPS verification.' 
                 : `Job ${action}ed successfully!`
         })
     } catch (error) {

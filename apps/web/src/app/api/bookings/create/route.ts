@@ -4,6 +4,7 @@
  * - Use existing addressId from cart (not create new address every time)
  * - Initial status: PAYMENT_RECEIVED (OPS verification pending)
  * - Support both ONLINE and COD payment methods
+ * - GST calculation based on category settings (inclusive pricing)
  * - Send notification to customer after booking creation
  * NOTE: Backward compatible - old code will still work
  */
@@ -38,10 +39,10 @@ export async function POST(request: Request) {
             serviceId,
             scheduledDate,
             scheduledTime,
-            addressId, // NEW: Use existing address ID
-            address, // LEGACY: Keep for backward compatibility
+            addressId,
+            address,
             specialInstructions,
-            paymentMethod, // NEW: ONLINE or COD
+            paymentMethod,
             baseAmount,
             addOnAmount,
             totalAmount,
@@ -80,6 +81,43 @@ export async function POST(request: Request) {
             )
         }
 
+        // ═══════════════════════════════
+        // NEW: GST Calculation (Inclusive Pricing)
+        // ═══════════════════════════════
+        // KYA: Category se GST fetch karke breakdown calculate karna
+        // KYUN: Customer ko sirf totalAmount dikhega (inclusive)
+        //       Backend accounting ke liye base + GST alag karenge
+        
+        const service = await db.service.findUnique({
+            where: { id: serviceId },
+            include: {
+                subCategory: {
+                    include: {
+                        category: true,
+                    },
+                },
+            },
+        })
+
+        if (!service) {
+            return NextResponse.json(
+                { success: false, error: 'Service not found' },
+                { status: 404 }
+            )
+        }
+
+        const category = service.subCategory.category
+        const gstRate = category.gstEnabled ? category.gstPercentage / 100 : 0
+        
+        // totalAmount is inclusive of GST
+        // baseAmount = totalAmount / (1 + gstRate)
+        // gstAmount = totalAmount - baseAmount
+        const finalTotalAmount = totalAmount || (baseAmount + (addOnAmount || 0))
+        const calculatedBaseAmount = gstRate > 0 
+            ? finalTotalAmount / (1 + gstRate) 
+            : finalTotalAmount
+        const calculatedGstAmount = finalTotalAmount - calculatedBaseAmount
+
         // Generate booking number
         const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`
 
@@ -92,12 +130,13 @@ export async function POST(request: Request) {
                 addressId: finalAddressId,
                 scheduledDate: new Date(scheduledDate),
                 scheduledTime,
-                baseAmount,
+                baseAmount: calculatedBaseAmount,
                 addOnAmount: addOnAmount || 0,
-                totalAmount,
+                totalAmount: finalTotalAmount,
+                gstAmount: calculatedGstAmount,
                 specialInstructions,
-                paymentMethod: paymentMethod || 'ONLINE', // NEW: Payment method
-                status: 'PAYMENT_RECEIVED', // NEW: Initial status (not PENDING)
+                paymentMethod: paymentMethod || 'ONLINE',
+                status: 'PAYMENT_RECEIVED',
                 paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
             },
             include: {
@@ -116,7 +155,7 @@ export async function POST(request: Request) {
         await db.payment.create({
             data: {
                 bookingId: booking.id,
-                amount: totalAmount,
+                amount: finalTotalAmount,
                 currency: 'INR',
                 method: paymentMethod || 'ONLINE',
                 status: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
@@ -129,7 +168,7 @@ export async function POST(request: Request) {
                 bookingId: booking.id,
                 status: 'PAYMENT_RECEIVED',
                 note: paymentMethod === 'COD' 
-                    ? 'Booking created via Cash on Delivery' 
+                    ? 'Booking created via POD (Payment on Delivery)' 
                     : 'Payment received, waiting for OPS confirmation',
                 changedBy: payload.userId,
             },
@@ -145,7 +184,6 @@ export async function POST(request: Request) {
             )
         } catch (notifError) {
             console.error('Notification error:', notifError)
-            // Don't fail booking if notification fails
         }
 
         return NextResponse.json({

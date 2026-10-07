@@ -1,7 +1,7 @@
 /**
  * WHAT: Payment page - Step 4 (final) of booking flow
- * WHY: Customer selects payment method (ONLINE/COD) and confirms booking
- * NOTE: Supports both Razorpay (online) and Cash on Delivery
+ * WHY: Customer selects payment method (ONLINE/POD) and confirms booking
+ * NOTE: POD = Payment on Delivery (online payment link after service)
  */
 
 'use client'
@@ -21,12 +21,10 @@ export default function PaymentPage() {
   const { items, addressId, getTotalAmount, clearCart } = useCartStore()
   const { isAuthenticated, token, user } = useAuthStore()
 
-  const [paymentMethod, setPaymentMethod] = useState<'ONLINE' | 'COD' | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'ONLINE' | 'POD' | null>(null)
   const [loading, setLoading] = useState(false)
 
   const totalAmount = getTotalAmount()
-  const gst = totalAmount * 0.18
-  const finalTotal = totalAmount + gst
 
   // Auth check
   useEffect(() => {
@@ -72,8 +70,8 @@ export default function PaymentPage() {
     try {
       const firstItem = items[0]
 
-      if (paymentMethod === 'COD') {
-        // COD Flow - Create booking directly
+      if (paymentMethod === 'POD') {
+        // POD Flow - Create booking directly (payment link after service)
         const bookings = await Promise.all(
           items.map(async (item) => {
             const response = await fetch('/api/bookings/create', {
@@ -88,7 +86,7 @@ export default function PaymentPage() {
                 scheduledTime: item.scheduledTime || firstItem.scheduledTime,
                 addressId,
                 specialInstructions: '',
-                paymentMethod: 'COD',
+                paymentMethod: 'POD',
                 baseAmount: item.selectedPrice * item.quantity,
                 addOnAmount: item.addOns.reduce((sum, a) => sum + a.price, 0) * item.quantity,
                 totalAmount: (item.selectedPrice + item.addOns.reduce((sum, a) => sum + a.price, 0)) * item.quantity,
@@ -102,14 +100,13 @@ export default function PaymentPage() {
 
         if (allSuccess) {
           clearCart()
-          toast.success('Booking confirmed! Payment will be collected at service time.')
+          toast.success('Booking confirmed! Payment link will be sent after service.')
           router.push('/booking/confirmation')
         } else {
           toast.error('Failed to create booking')
         }
       } else {
         // ONLINE Flow - Razorpay
-        // Step 1: Create bookings first
         const bookings = await Promise.all(
           items.map(async (item) => {
             const response = await fetch('/api/bookings/create', {
@@ -169,7 +166,6 @@ export default function PaymentPage() {
           description: 'Service Booking Payment',
           order_id: orderData.data.orderId,
           handler: async function (response: any) {
-            // Step 4: Verify payment
             const verifyResponse = await fetch('/api/payments/verify', {
               method: 'POST',
               headers: {
@@ -318,32 +314,32 @@ export default function PaymentPage() {
                   </div>
                 </div>
 
-                {/* Cash on Delivery */}
+                {/* Payment on Delivery (POD) */}
                 <div
-                  onClick={() => setPaymentMethod('COD')}
+                  onClick={() => setPaymentMethod('POD')}
                   className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    paymentMethod === 'COD'
+                    paymentMethod === 'POD'
                       ? 'border-primary bg-primary/5'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      paymentMethod === 'COD'
+                      paymentMethod === 'POD'
                         ? 'border-primary bg-primary'
                         : 'border-gray-300'
                     }`}>
-                      {paymentMethod === 'COD' && (
+                      {paymentMethod === 'POD' && (
                         <CheckCircle2 className="w-3 h-3 text-white" />
                       )}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <Banknote className="w-5 h-5 text-primary" />
-                        <span className="font-semibold">Cash on Delivery</span>
+                        <span className="font-semibold">Payment on Delivery</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Pay cash to the service professional at your location
+                        Pay online via payment link after service completion
                       </p>
                     </div>
                   </div>
@@ -365,7 +361,7 @@ export default function PaymentPage() {
                 </>
               ) : (
                 <>
-                  {paymentMethod === 'COD' ? 'Confirm Booking (COD)' : 'Pay Now'}
+                  {paymentMethod === 'POD' ? 'Confirm Booking (POD)' : 'Pay Now'}
                 </>
               )}
             </Button>
@@ -383,15 +379,14 @@ export default function PaymentPage() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₹{totalAmount.toFixed(0)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">GST (18%)</span>
-                    <span>₹{gst.toFixed(0)}</span>
-                  </div>
                   <div className="border-t pt-2">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span className="text-primary">₹{finalTotal.toFixed(0)}</span>
+                      <span className="text-primary">₹{totalAmount.toFixed(0)}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      (Inclusive of all taxes)
+                    </p>
                   </div>
                 </div>
 

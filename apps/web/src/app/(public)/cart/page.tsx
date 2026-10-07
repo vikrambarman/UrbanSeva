@@ -39,8 +39,8 @@ export default function CartPage() {
   const { isAuthenticated } = useAuthStore()
 
   const totalAmount = getTotalAmount()
-  const gstAmount = totalAmount * 0.18
-  const grandTotal = totalAmount + gstAmount
+  // Deleted:const gstAmount = totalAmount * 0.18
+  // Deleted:const grandTotal = totalAmount + gstAmount
 
   const [couponCode, setCouponCode] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -76,10 +76,11 @@ export default function CartPage() {
     toast.info('Coupon removed')
   }
 
+
   const discountAmount = appliedCoupon
     ? (totalAmount * appliedCoupon.discount) / 100
     : 0
-  const finalTotal = grandTotal - discountAmount
+  const finalTotal = totalAmount - discountAmount
 
   // ═══════════════════════════════════════════════════════════════
   // NEW: Checkout handler with login check
@@ -295,10 +296,10 @@ export default function CartPage() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="font-medium">₹{totalAmount.toFixed(0)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">GST (18%)</span>
-                    <span className="font-medium">₹{gstAmount.toFixed(0)}</span>
-                  </div>
+                  {/* Deleted:                  <div className="flex justify-between text-sm"> */}
+                  {/* Deleted:                    <span className="text-muted-foreground">GST (18%)</span> */}
+                  {/* Deleted:                    <span className="font-medium">₹{gstAmount.toFixed(0)}</span> */}
+                  {/* Deleted:                  </div> */}
 
                   {appliedCoupon && (
                     <div className="flex justify-between text-sm text-green-600">
@@ -317,6 +318,9 @@ export default function CartPage() {
                         ₹{finalTotal.toFixed(0)}
                       </span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      (Inclusive of all taxes)
+                    </p>
                   </div>
                 </div>
 

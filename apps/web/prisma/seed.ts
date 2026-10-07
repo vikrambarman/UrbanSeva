@@ -49,26 +49,38 @@ async function main() {
   // ═══════════════════════════════════════════
 
   const categories = [
-    { name: 'Home Cleaning Services', slug: 'home-cleaning', icon: '🧹', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80', sortOrder: 1 },
-    { name: 'Electrical Services', slug: 'electrical', icon: '⚡', image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80', sortOrder: 2 },
-    { name: 'Plumbing Services', slug: 'plumbing', icon: '🔧', image: 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d28?w=400&q=80', sortOrder: 3 },
-    { name: 'AC & Appliance Services', slug: 'ac-appliance', icon: '❄️', image: 'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400&q=80', sortOrder: 4 },
-    { name: 'Painting Services', slug: 'painting', icon: '🎨', image: 'https://images.unsplash.com/photo-1562259929-b4e1fd3aef09?w=400&q=80', sortOrder: 5 },
-    { name: 'Pest Control Services', slug: 'pest-control', icon: '🐛', image: 'https://images.unsplash.com/photo-1632163565874-b7a3a82b1527?w=400&q=80', sortOrder: 6 },
-    { name: 'Beauty & Wellness', slug: 'beauty-wellness', icon: '💆', image: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=400&q=80', sortOrder: 7 },
-    { name: 'Carpentry Services', slug: 'carpentry', icon: '🪚', image: 'https://images.unsplash.com/photo-1566837945700-30057527ade0?w=400&q=80', sortOrder: 8 },
-    { name: 'Home Improvement', slug: 'home-improvement', icon: '🏠', image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&q=80', sortOrder: 9 },
-    { name: 'Vehicle Services', slug: 'vehicle-services', icon: '🚗', image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?w=400&q=80', sortOrder: 10 },
-    { name: 'Property Services', slug: 'property-services', icon: '🏢', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&q=80', sortOrder: 11 },
-    { name: 'Education & Tuition', slug: 'education-tuition', icon: '📚', image: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&q=80', sortOrder: 12 },
-    { name: 'Healthcare at Home', slug: 'healthcare', icon: '🏥', image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400&q=80', sortOrder: 13 },
-    { name: 'Pet Care Services', slug: 'pet-care', icon: '🐾', image: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400&q=80', sortOrder: 14 },
-    { name: 'Events & Occasions', slug: 'events-occasions', icon: '🎉', image: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400&q=80', sortOrder: 15 },
-    { name: 'Packers & Movers', slug: 'packers-movers', icon: '📦', image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80', sortOrder: 16 },
+    { name: 'Home Cleaning Services', slug: 'home-cleaning', icon: '🧹', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80', sortOrder: 1, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Electrical Services', slug: 'electrical', icon: '⚡', image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80', sortOrder: 2, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Plumbing Services', slug: 'plumbing', icon: '🔧', image: 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d28?w=400&q=80', sortOrder: 3, gstEnabled: false, gstPercentage: 0 },
+    { name: 'AC & Appliance Services', slug: 'ac-appliance', icon: '❄️', image: 'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400&q=80', sortOrder: 4, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Painting Services', slug: 'painting', icon: '🎨', image: 'https://images.unsplash.com/photo-1562259929-b4e1fd3aef09?w=400&q=80', sortOrder: 5, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Pest Control Services', slug: 'pest-control', icon: '🐛', image: 'https://images.unsplash.com/photo-1632163565874-b7a3a82b1527?w=400&q=80', sortOrder: 6, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Beauty & Wellness', slug: 'beauty-wellness', icon: '💆', image: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=400&q=80', sortOrder: 7, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Carpentry Services', slug: 'carpentry', icon: '🪚', image: 'https://images.unsplash.com/photo-1566837945700-30057527ade0?w=400&q=80', sortOrder: 8, gstEnabled: false, gstPercentage: 0 },
+    { name: 'Home Improvement', slug: 'home-improvement', icon: '🏠', image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&q=80', sortOrder: 9, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Vehicle Services', slug: 'vehicle-services', icon: '🚗', image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?w=400&q=80', sortOrder: 10, gstEnabled: false, gstPercentage: 0 },
+    { name: 'Property Services', slug: 'property-services', icon: '🏢', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&q=80', sortOrder: 11, gstEnabled: false, gstPercentage: 0 },
+    { name: 'Education & Tuition', slug: 'education-tuition', icon: '📚', image: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&q=80', sortOrder: 12, gstEnabled: false, gstPercentage: 0 },
+    { name: 'Healthcare at Home', slug: 'healthcare', icon: '🏥', image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400&q=80', sortOrder: 13, gstEnabled: true, gstPercentage: 12 },
+    { name: 'Pet Care Services', slug: 'pet-care', icon: '🐾', image: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400&q=80', sortOrder: 14, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Events & Occasions', slug: 'events-occasions', icon: '🎉', image: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400&q=80', sortOrder: 15, gstEnabled: true, gstPercentage: 18 },
+    { name: 'Packers & Movers', slug: 'packers-movers', icon: '📦', image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80', sortOrder: 16, gstEnabled: true, gstPercentage: 18 },
   ]
 
   for (const cat of categories) {
-    await db.category.upsert({ where: { slug: cat.slug }, update: { image: cat.image }, create: { ...cat, description: '', isActive: true } })
+    await db.category.upsert({
+      where: { slug: cat.slug },
+      update: {
+        image: cat.image,
+        gstEnabled: cat.gstEnabled,
+        gstPercentage: cat.gstPercentage,
+      },
+      create: {
+        ...cat,
+        description: '',
+        isActive: true
+      }
+    })
   }
   console.log('✅ 16 Categories created')
 
@@ -79,7 +91,7 @@ async function main() {
   async function createSubCategory(categorySlug: string, data: { name: string; slug: string; image: string }) {
     const category = await db.category.findUnique({ where: { slug: categorySlug } })
     if (!category) throw new Error(`Category not found: ${categorySlug}`)
-    
+
     await db.subCategory.upsert({
       where: { slug: data.slug },
       update: {},

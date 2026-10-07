@@ -315,6 +315,15 @@ model Category {
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
 
+  // ═══════════════════════════════
+  // NEW: GST Configuration
+  // ═══════════════════════════════
+  // KYA: Category-wise GST control
+  // KYUN: Admin har category ke liye GST enable/disable kar sakta hai
+  //       Aur percentage set kar sakta hai (5%, 12%, 18%, 28%)
+  gstEnabled    Boolean       @default(false)
+  gstPercentage Float         @default(0)
+
   subCategories SubCategory[]
   staffCategories StaffCategory[]
 }
@@ -533,6 +542,16 @@ model Booking {
   paymentMethod       String?       // "ONLINE" | "COD"
   razorpayOrderId     String?
   razorpayPaymentId   String?
+
+  // ═══════════════════════════════
+  // NEW: POD Payment Link Fields
+  // ═══════════════════════════════
+  // KYA: Razorpay payment link for POD bookings
+  // KYUN: Provider payment link generate karega, customer pay karega
+  razorpayPaymentLinkId   String?
+  razorpayPaymentLinkUrl  String?
+
+  
   startOTP            String?
   endOTP              String?
   startedAt           DateTime?
@@ -544,6 +563,14 @@ model Booking {
   afterPhotos         String[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
+  // ═══════════════════════════════
+  // NEW: GST Breakdown (for accounting only)
+  // ═══════════════════════════════
+  // KYA: GST amount jo totalAmount mein include hai
+  // KYUN: Backend accounting ke liye - customer ko nahi dikhega
+  //       Example: totalAmount=1000, gstAmount=152.54, base=847.46
+  gstAmount           Float         @default(0)
 
   user          User                   @relation(fields: [userId], references: [id])
   provider      Provider?              @relation(fields: [providerId], references: [id])
@@ -714,33 +741,61 @@ model Coupon {
 // ═══════════════════════════════
 
 model ProviderEarning {
-  id         String        @id @default(cuid())
-  providerId String
-  bookingId  String
-  gross      Float
-  commission Float
-  net        Float
-  status     EarningStatus @default(PENDING)
-  createdAt  DateTime      @default(now())
+  id              String        @id @default(cuid())
+  providerId      String
+  bookingId       String
+  gross           Float
+  commission      Float
+  net             Float
+  status          EarningStatus @default(PENDING)
+  
+  // ═══════════════════════════════
+  // NEW: Payment Method Tracking
+  // ═══════════════════════════════
+  // KYA: Booking ka payment method (ONLINE/POD)
+  // KYUN: POD earnings alag track karne ke liye
+  paymentMethod   String        @default("ONLINE") // "ONLINE" | "POD"
+  
+  // ═══════════════════════════════
+  // NEW: Settlement Tracking
+  // ═══════════════════════════════
+  // KYA: POD payment ka settlement status
+  // KYUN: Provider ne customer se cash collect kiya ya nahi
+  collectedAmount Float?        // Provider ne kitna collect kiya
+  collectedAt     DateTime?     // Collection timestamp
+  settledAt       DateTime?     // Settlement timestamp
+  
+  createdAt       DateTime      @default(now())
 
   provider Provider @relation(fields: [providerId], references: [id])
 
   @@index([providerId])
+  @@index([status])
+  @@index([paymentMethod])
 }
 
 model Payout {
-  id          String       @id @default(cuid())
-  providerId  String
-  amount      Float
-  method      String
-  status      PayoutStatus @default(PENDING)
-  reference   String?
-  processedAt DateTime?
-  createdAt   DateTime     @default(now())
+  id              String       @id @default(cuid())
+  providerId      String
+  amount          Float
+  method          String       // "BANK_TRANSFER" | "UPI" | "CASH"
+  status          PayoutStatus @default(PENDING)
+  reference       String?      // Transaction ID / UTR
+  processedAt     DateTime?
+  processedBy     String?      // OPS user ID who processed
+  
+  // ═══════════════════════════════
+  // NEW: Payout Details
+  // ═══════════════════════════════
+  notes           String?      // OPS notes
+  rejectionReason String?      // If rejected
+  
+  createdAt       DateTime     @default(now())
 
   provider Provider @relation(fields: [providerId], references: [id])
 
   @@index([providerId])
+  @@index([status])
 }
 
 // ═══════════════════════════════

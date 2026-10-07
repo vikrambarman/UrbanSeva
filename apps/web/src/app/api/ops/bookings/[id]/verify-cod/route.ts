@@ -1,8 +1,9 @@
 /**
- * WHAT: OPS verifies COD payment collection (FIXED)
+ * WHAT: OPS verifies POD/COD payment collection
  * WHY: 
- * - Schema fields ab exist karte hain
- * - Proper type checking
+ * - POD bookings ke liye bhi verification
+ * - Payment link se payment aaya hai ya nahi
+ * - Earning status SETTLED hoga
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -42,22 +43,22 @@ export async function POST(
             )
         }
 
-        if (booking.paymentMethod !== 'COD') {
+        // FIX: Support both COD and POD
+        if (booking.paymentMethod !== 'COD' && booking.paymentMethod !== 'POD') {
             return NextResponse.json(
-                { success: false, error: 'This is not a COD booking' },
+                { success: false, error: 'This is not a COD/POD booking' },
                 { status: 400 }
             )
         }
 
-        // FIX: Check if already verified
-        if (booking.codVerifiedBy) {
+        // Check if already verified
+        if (booking.codVerifiedBy && booking.paymentStatus === 'PAID') {
             return NextResponse.json(
-                { success: false, error: 'COD already verified' },
+                { success: false, error: 'Payment already verified' },
                 { status: 400 }
             )
         }
 
-        // FIX: Use proper fallback
         const finalAmount = verifiedAmount || booking.codAmountCollected || booking.totalAmount
 
         await db.booking.update({
@@ -67,6 +68,16 @@ export async function POST(
                 codVerifiedBy: user.userId,
                 codVerifiedAt: new Date(),
                 codDisputed: isDisputed || false,
+                paymentStatus: 'PAID',
+            }
+        })
+
+        // Update payment record
+        await db.payment.updateMany({
+            where: { bookingId },
+            data: {
+                status: 'PAID',
+                paidAt: new Date(),
             }
         })
 
@@ -90,14 +101,18 @@ export async function POST(
                             gross: finalAmount,
                             commission,
                             net,
-                            status: 'SETTLED'
+                            status: 'SETTLED',
+                            settledAt: new Date(),
                         }
                     })
                 }
             } else {
                 await db.providerEarning.update({
                     where: { id: earning.id },
-                    data: { status: 'SETTLED' }
+                    data: { 
+                        status: 'SETTLED',
+                        settledAt: new Date(),
+                    }
                 })
             }
         }
@@ -106,11 +121,10 @@ export async function POST(
             data: {
                 bookingId,
                 actionBy: user.userId,
-                action: 'COD_VERIFIED',
-                // FIX: Use proper fallback
+                action: 'PAYMENT_VERIFIED',
                 fromValue: `₹${booking.codAmountCollected || booking.totalAmount}`,
                 toValue: `₹${finalAmount}`,
-                notes: notes || (isDisputed ? 'Amount disputed' : 'COD verified'),
+                notes: notes || (isDisputed ? 'Amount disputed' : `${booking.paymentMethod} verified`),
             }
         })
 
@@ -118,7 +132,7 @@ export async function POST(
             data: {
                 bookingId,
                 status: booking.status,
-                note: `COD verified: ₹${finalAmount}${isDisputed ? ' (Disputed)' : ''}${notes ? ` - ${notes}` : ''}`,
+                note: `${booking.paymentMethod} verified: ₹${finalAmount}${isDisputed ? ' (Disputed)' : ''}${notes ? ` - ${notes}` : ''}`,
                 changedBy: user.userId,
             }
         })
@@ -127,8 +141,8 @@ export async function POST(
             try {
                 await sendNotification({
                     userId: booking.provider.userId,
-                    title: 'COD Payment Verified',
-                    body: `Your COD collection of ₹${finalAmount} for booking #${booking.bookingNumber} has been verified.`,
+                    title: 'Payment Verified',
+                    body: `Your ${booking.paymentMethod} collection of ₹${finalAmount} for booking #${booking.bookingNumber} has been verified.`,
                     type: 'GENERAL',
                     referenceId: bookingId,
                 })
@@ -139,7 +153,7 @@ export async function POST(
 
         return NextResponse.json({
             success: true,
-            message: `COD verified: ₹${finalAmount}`,
+            message: `${booking.paymentMethod} verified: ₹${finalAmount}`,
             data: {
                 verifiedAmount: finalAmount,
                 isDisputed: isDisputed || false,
@@ -147,7 +161,7 @@ export async function POST(
         })
 
     } catch (error) {
-        console.error('❌ COD verification error:', error)
+        console.error('❌ Payment verification error:', error)
         return NextResponse.json(
             { success: false, error: 'Internal server error' },
             { status: 500 }

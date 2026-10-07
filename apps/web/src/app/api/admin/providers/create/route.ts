@@ -1,7 +1,7 @@
-// apps/web/src/app/api/admin/providers/create/route.ts
-// CHANGE: serviceIds array receive karke ProviderService entries create ki
-// CHANGE: Transaction mein sab kuch ek saath hoga — atomic operation
-// WHY: Provider create karte waqt hi services assign ho jayengi
+// ═══════════════════════════════
+// CHANGE: Add service ID validation before creating ProviderService
+// WHY: Foreign key constraint error aa raha tha - serviceIds validate nahi ho rahe the
+// ═══════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -92,12 +92,52 @@ export async function POST(request: NextRequest) {
                 }
             })
 
-            // 3. NEW: Create ProviderService entries
+            // 3. NEW: Validate serviceIds exist in Service table
+            // ═══════════════════════════════
+            // KYA: Service IDs verify karna before ProviderService creation
+            // KYUN: Foreign key constraint error se bachne ke liye
+            // ═══════════════════════════════
             if (serviceIds && serviceIds.length > 0) {
+                // Fetch all services from database
+                const validServices = await tx.service.findMany({
+                    where: {
+                        id: {
+                            in: serviceIds
+                        },
+                        isActive: true  // Only active services
+                    },
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                })
+
+                // Check if all serviceIds are valid
+                if (validServices.length === 0) {
+                    throw new Error('No valid services found. Please select active services.')
+                }
+
+                if (validServices.length < serviceIds.length) {
+                    // Some services are invalid
+                    const validIds = validServices.map(s => s.id)
+                    const invalidIds = serviceIds.filter(id => !validIds.includes(id))
+                    
+                    console.warn(`Invalid service IDs detected: ${invalidIds.join(', ')}`)
+                    
+                    // Option 1: Throw error (strict validation)
+                    throw new Error(
+                        `${invalidIds.length} service(s) not found or inactive. Valid services: ${validServices.length}`
+                    )
+                    
+                    // Option 2: Only create for valid services (lenient - uncomment if needed)
+                    // serviceIds = validIds
+                }
+
+                // Create ProviderService entries only for valid services
                 await tx.providerService.createMany({
-                    data: serviceIds.map((serviceId: string) => ({
+                    data: validServices.map((service) => ({
                         providerId: provider.id,
-                        serviceId: serviceId,
+                        serviceId: service.id,
                         assignedBy: admin.userId,
                         isActive: true,
                     }))
@@ -114,7 +154,7 @@ export async function POST(request: NextRequest) {
             console.log(`Phone: ${phone}`)
             console.log(`Password: ${plainPassword}`)
             console.log(`Login: ${process.env.NEXT_PUBLIC_APP_URL}/provider-login`)
-            console.log(`Services Assigned: ${serviceIds.length}`)
+            console.log(`Services Assigned: ${result.provider.id}`)
             console.log('==========================================\n')
         }
 
@@ -126,8 +166,19 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error('Create Provider Error:', error)
+        
+        // Handle Prisma constraint errors
+        if (error instanceof Error) {
+            if (error.message.includes('Foreign key constraint')) {
+                return NextResponse.json(
+                    { success: false, error: 'Invalid service IDs. Please ensure all selected services are active.' },
+                    { status: 400 }
+                )
+            }
+        }
+        
         return NextResponse.json(
-            { success: false, error: 'Failed to create provider' },
+            { success: false, error: error instanceof Error ? error.message : 'Failed to create provider' },
             { status: 500 }
         )
     }
