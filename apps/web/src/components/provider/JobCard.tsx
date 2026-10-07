@@ -1,94 +1,105 @@
+/**
+ * WHAT: Job card with payment method indicator
+ * WHY: Provider needs to know if it's ONLINE or COD
+ */
+
 "use client"
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, MapPin, User, Clock, ChevronRight, Star } from "lucide-react"
+import { Calendar, Clock, MapPin, User, Phone, CreditCard, Banknote } from "lucide-react"
 import Link from "next/link"
 
 interface JobCardProps {
     job: any
-    onAction?: (id: string, action: string) => void
+    onAction: (id: string, action: string, job?: any) => void
 }
 
 export function JobCard({ job, onAction }: JobCardProps) {
     const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'PENDING': return 'secondary'
-            case 'CONFIRMED': return 'default'
-            case 'PROVIDER_ASSIGNED': return 'outline'
-            case 'SERVICE_STARTED': return 'default'
-            case 'SERVICE_COMPLETED': return 'default'
-            case 'CANCELLED': return 'destructive'
-            default: return 'secondary'
+        const colors: Record<string, string> = {
+            PROVIDER_ASSIGNED: 'bg-blue-100 text-blue-700 border-blue-200',
+            CONFIRMED: 'bg-green-100 text-green-700 border-green-200',
+            PROVIDER_TRAVELLING: 'bg-purple-100 text-purple-700 border-purple-200',
+            SERVICE_STARTED: 'bg-orange-100 text-orange-700 border-orange-200',
+            SERVICE_COMPLETED: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+            CANCELLED: 'bg-red-100 text-red-700 border-red-200',
+            CANCELLED_BY_PROVIDER: 'bg-red-100 text-red-700 border-red-200',
         }
+        return colors[status] || 'bg-gray-100 text-gray-700 border-gray-200'
     }
 
     return (
         <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        {job.service.image && (
-                            <img src={job.service.image} alt={job.service.name} className="w-12 h-12 rounded-md object-cover" />
-                        )}
-                        <div>
-                            <h3 className="font-semibold">{job.service.name}</h3>
-                            <p className="text-sm text-muted-foreground">#{job.bookingNumber}</p>
-                        </div>
+                <div className="flex items-start justify-between">
+                    <div>
+                        <CardTitle className="text-lg">{job.service.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">#{job.bookingNumber}</p>
                     </div>
-                    <Badge variant={getStatusColor(job.status) as any}>
-                        {job.status.replace(/_/g, ' ')}
-                    </Badge>
+                    <div className="flex flex-col gap-2">
+                        <Badge className={getStatusColor(job.status)}>
+                            {job.status.replace(/_/g, ' ')}
+                        </Badge>
+                        {/* Payment Method Badge */}
+                        <Badge 
+                            variant="outline" 
+                            className={job.paymentMethod === 'COD' 
+                                ? 'border-orange-300 text-orange-700' 
+                                : 'border-green-300 text-green-700'
+                            }
+                        >
+                            {job.paymentMethod === 'COD' ? (
+                                <><Banknote className="h-3 w-3 mr-1" /> COD</>
+                            ) : (
+                                <><CreditCard className="h-3 w-3 mr-1" /> Online</>
+                            )}
+                        </Badge>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>{new Date(job.scheduledDate).toLocaleDateString('en-IN')}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>{job.scheduledTime}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <User className="h-4 w-4" />
-                        <span>{job.user.name || 'Customer'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span className="truncate">{job.address.area}</span>
-                    </div>
+                <div className="flex items-center gap-2 text-sm">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{job.user.name}</span>
+                    <a href={`tel:${job.user.phone}`} className="ml-auto text-primary hover:underline">
+                        <Phone className="h-4 w-4" />
+                    </a>
                 </div>
-
-                {job.review && (
-                    <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-medium">{job.review.overallRating}/5</span>
-                        {job.review.comment && <span className="text-sm text-muted-foreground truncate">- {job.review.comment}</span>}
-                    </div>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t">
+                <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span>{new Date(job.scheduledDate).toLocaleDateString('en-IN')}</span>
+                    <Clock className="h-4 w-4 text-muted-foreground ml-2" />
+                    <span>{job.scheduledTime}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate">{job.address.area}</span>
+                </div>
+                <div className="pt-3 border-t flex items-center justify-between">
                     <span className="text-lg font-bold">₹{job.totalAmount}</span>
                     <div className="flex gap-2">
-                        {job.status === 'PROVIDER_ASSIGNED' && onAction && (
+                        {job.status === 'PROVIDER_ASSIGNED' && (
                             <>
-                                <Button size="sm" onClick={() => onAction(job.id, 'accept')}>Accept</Button>
-                                <Button size="sm" variant="outline" onClick={() => onAction(job.id, 'reject')}>Reject</Button>
+                                <Button size="sm" onClick={() => onAction(job.id, 'accept', job)}>Accept</Button>
+                                <Button size="sm" variant="destructive" onClick={() => onAction(job.id, 'reject', job)}>Reject</Button>
                             </>
                         )}
-                        {job.status === 'CONFIRMED' && onAction && (
-                            <Button size="sm" onClick={() => onAction(job.id, 'start')}>Start Job</Button>
+                        {job.status === 'CONFIRMED' && (
+                            <>
+                                <Button size="sm" onClick={() => onAction(job.id, 'on_the_way', job)}>On Way</Button>
+                                <Button size="sm" onClick={() => onAction(job.id, 'start', job)}>Start</Button>
+                            </>
                         )}
-                        {job.status === 'SERVICE_STARTED' && onAction && (
-                            <Button size="sm" onClick={() => onAction(job.id, 'complete')}>Complete Job</Button>
+                        {job.status === 'PROVIDER_TRAVELLING' && (
+                            <Button size="sm" onClick={() => onAction(job.id, 'start', job)}>Start Service</Button>
                         )}
-                        <Button asChild variant="ghost" size="sm">
-                            <Link href={`/provider/jobs/${job.id}`}>
-                                Details <ChevronRight className="h-4 w-4 ml-1" />
-                            </Link>
+                        {job.status === 'SERVICE_STARTED' && (
+                            <Button size="sm" onClick={() => onAction(job.id, 'complete', job)}>Complete</Button>
+                        )}
+                        <Button size="sm" variant="outline" asChild>
+                            <Link href={`/provider/jobs/${job.id}`}>View</Link>
                         </Button>
                     </div>
                 </div>

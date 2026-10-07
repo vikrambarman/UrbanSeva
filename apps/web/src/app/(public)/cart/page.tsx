@@ -1,13 +1,19 @@
-// app/(public)/cart/page.tsx
+/**
+ * WHAT: Cart page with updated checkout redirect (FIXED)
+ * WHY: 
+ * - Old /booking/checkout page deleted
+ * - New flow: /booking/[serviceId]/schedule → address → review → payment
+ * - If single item → redirect to that service's schedule
+ * - If multiple items → redirect to first item's schedule (payment page handles all)
+ */
 
 'use client'
 
-// CHANGE: Added useState for coupon functionality (frontend-only, API baad mein)
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-// CHANGE: Replaced emoji with Lucide icons — ShoppingCart, ArrowRight, ArrowLeft, Tag, CheckCircle, Shield, Truck
 import {
   Minus,
   Plus,
@@ -24,17 +30,18 @@ import {
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useCartStore } from '@/store/cartStore'
-// CHANGE: Import ServiceImageWithFallback — established reusable component for consistent image handling
+import { useAuthStore } from '@/store/authStore'
 import { ServiceImageWithFallback } from '@/components/services/ServiceImageWithFallback'
 
 export default function CartPage() {
+  const router = useRouter()
   const { items, removeItem, updateQuantity, getTotalAmount, clearCart } = useCartStore()
+  const { isAuthenticated } = useAuthStore()
 
   const totalAmount = getTotalAmount()
   const gstAmount = totalAmount * 0.18
   const grandTotal = totalAmount + gstAmount
 
-  // CHANGE: Coupon state management — frontend-only, real validation API baad mein
   const [couponCode, setCouponCode] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string
@@ -47,7 +54,6 @@ export default function CartPage() {
       return
     }
 
-    // CHANGE: Mock coupon validation — replace with API call later
     const mockCoupons: Record<string, number> = {
       WELCOME10: 10,
       FIRST20: 20,
@@ -70,11 +76,33 @@ export default function CartPage() {
     toast.info('Coupon removed')
   }
 
-  // CHANGE: Calculate discount amount if coupon applied
   const discountAmount = appliedCoupon
     ? (totalAmount * appliedCoupon.discount) / 100
     : 0
   const finalTotal = grandTotal - discountAmount
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Checkout handler with login check
+  // ═══════════════════════════════════════════════════════════════
+  const handleCheckout = () => {
+    // Login check
+    if (!isAuthenticated) {
+      toast.info('Please login to continue')
+      router.push('/login?redirect=/cart')
+      return
+    }
+
+    // Cart empty check
+    if (items.length === 0) {
+      toast.error('Your cart is empty')
+      return
+    }
+
+    // Redirect to first item's schedule page
+    // Payment page will handle all items
+    const firstItem = items[0]
+    router.push(`/booking/${firstItem.serviceId}/schedule`)
+  }
 
   // ─────────────────────────────────────────────────────────────
   // EMPTY CART STATE
@@ -82,10 +110,8 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        {/* CHANGE: Container width fixed — max-w-[1400px] mx-auto px-4 md:px-6 (design system convention) */}
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-16">
           <div className="max-w-md mx-auto text-center">
-            {/* CHANGE: Replaced 🛒 emoji with Lucide ShoppingCart icon inside styled circle */}
             <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
               <ShoppingCart className="w-12 h-12 text-primary" />
             </div>
@@ -110,11 +136,8 @@ export default function CartPage() {
   // ─────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
-      {/* CHANGE: Container width fixed — max-w-[1400px] mx-auto px-4 md:px-6 */}
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-8">
-        {/* CHANGE: Hero header added — consistent with other enhanced pages */}
         <div className="mb-8">
-          {/* CHANGE: "Continue Shopping" link added — easy navigation back to services */}
           <Link
             href="/services"
             className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
@@ -125,13 +148,11 @@ export default function CartPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
-              {/* CHANGE: Hero icon with badge — matches design system pattern */}
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <ShoppingCart className="w-6 h-6 text-primary" />
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold">Your Cart</h1>
-                {/* CHANGE: Item count as subtitle with badge styling */}
                 <p className="text-muted-foreground text-sm mt-0.5">
                   {items.length} service{items.length > 1 ? 's' : ''} selected
                 </p>
@@ -153,9 +174,7 @@ export default function CartPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* ─────────────────────────────────────────────────────── */}
-          {/* CART ITEMS — Left Column */}
-          {/* ─────────────────────────────────────────────────────── */}
+          {/* CART ITEMS */}
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => {
               const unitPrice =
@@ -164,16 +183,12 @@ export default function CartPage() {
               const lineTotal = unitPrice * item.quantity
 
               return (
-                // CHANGE: Added hover effect + transition on cart item cards
                 <Card
                   key={item.id}
                   className="overflow-hidden hover:shadow-md transition-shadow"
                 >
                   <CardContent className="p-4 md:p-6">
-                    {/* CHANGE: Mobile layout improved — image and details stack better on small screens */}
                     <div className="flex flex-col sm:flex-row gap-4">
-                      {/* Image */}
-                      {/* CHANGE: Replaced raw <Image> with ServiceImageWithFallback for consistent fallback handling */}
                       <div className="relative w-full sm:w-28 h-40 sm:h-28 rounded-lg overflow-hidden flex-shrink-0">
                         <ServiceImageWithFallback
                           src={item.serviceImage || ''}
@@ -182,7 +197,6 @@ export default function CartPage() {
                         />
                       </div>
 
-                      {/* Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
@@ -194,7 +208,6 @@ export default function CartPage() {
                             </p>
                           </div>
 
-                          {/* CHANGE: Remove button repositioned — top-right for better mobile access */}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -208,7 +221,6 @@ export default function CartPage() {
                           </Button>
                         </div>
 
-                        {/* Add-ons */}
                         {item.addOns.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mb-3">
                             {item.addOns.map((a) => (
@@ -223,7 +235,6 @@ export default function CartPage() {
                         )}
 
                         <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                          {/* Quantity Controls */}
                           <div className="flex items-center gap-2">
                             <Button
                               variant="outline"
@@ -253,7 +264,6 @@ export default function CartPage() {
                             </Button>
                           </div>
 
-                          {/* Price */}
                           <div className="text-right">
                             <div className="text-lg font-bold text-primary">
                               ₹{lineTotal.toFixed(0)}
@@ -273,16 +283,13 @@ export default function CartPage() {
             })}
           </div>
 
-          {/* ─────────────────────────────────────────────────────── */}
-          {/* ORDER SUMMARY — Right Column (Sticky) */}
-          {/* ─────────────────────────────────────────────────────── */}
+          {/* ORDER SUMMARY */}
           <div className="lg:col-span-1">
             <Card className="sticky top-24">
               <CardHeader className="pb-4">
                 <CardTitle className="text-xl">Order Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Price Breakdown */}
                 <div className="space-y-2.5">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -293,7 +300,6 @@ export default function CartPage() {
                     <span className="font-medium">₹{gstAmount.toFixed(0)}</span>
                   </div>
 
-                  {/* CHANGE: Discount row — only shows when coupon is applied */}
                   {appliedCoupon && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span className="flex items-center gap-1">
@@ -317,7 +323,6 @@ export default function CartPage() {
                 {/* Coupon Section */}
                 <div className="border-t pt-4">
                   {appliedCoupon ? (
-                    // CHANGE: Applied coupon display with remove option
                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600" />
@@ -335,7 +340,6 @@ export default function CartPage() {
                       </Button>
                     </div>
                   ) : (
-                    // CHANGE: Coupon input with functional apply button + state management
                     <div>
                       <label className="text-sm font-medium mb-2 block">
                         Have a coupon code?
@@ -362,19 +366,18 @@ export default function CartPage() {
                   )}
                 </div>
 
-                {/* Checkout Button */}
-                {/* CHANGE: Replaced text arrow "→" with ArrowRight Lucide icon */}
-                <Link href="/booking/checkout">
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                    size="lg"
-                  >
-                    Proceed to Checkout
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                {/* UPDATED: Checkout Button with proper redirect */}
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                <Button
+                  onClick={handleCheckout}
+                  className="w-full bg-primary hover:bg-primary/90 text-white"
+                  size="lg"
+                >
+                  Proceed to Checkout
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
 
-                {/* CHANGE: Trust indicators added — replaces plain text with icon-based trust signals */}
                 <div className="space-y-2 pt-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Shield className="w-3.5 h-3.5 text-primary" />

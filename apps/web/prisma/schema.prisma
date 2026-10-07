@@ -130,6 +130,7 @@ enum DiscountType {
 
 enum EarningStatus {
   PENDING
+  PENDING_VERIFICATION  // NEW: COD needs OPS verification
   SETTLED
   PAYOUT_INITIATED
   PAID
@@ -552,6 +553,14 @@ model Booking {
   payment       Payment?
   statusHistory BookingStatusHistory[]
   assignmentLogs BookingAssignmentLog[]
+
+  // ═══════════════════════════════
+  // NEW FIELDS - COD Payment Tracking
+  // ═══════════════════════════════
+  codAmountCollected  Float?      // Provider ne kitna collect kiya
+  codVerifiedBy       String?     // OPS ne verify kiya (user ID)
+  codVerifiedAt       DateTime?   // Verification timestamp
+  codDisputed         Boolean     @default(false)  // Amount disputed hai ya nahi
   
   // ═══════════════════════════════
   // NEW RELATION - Reschedule Requests
