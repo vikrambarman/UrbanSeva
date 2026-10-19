@@ -11,8 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { 
-    Clock, CheckCircle2, CalendarClock, XCircle, 
+import {
+    Clock, CheckCircle2, CalendarClock, XCircle,
     AlertCircle, ArrowRight, Headphones
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-client"
@@ -43,15 +43,21 @@ export default function OpsDashboardPage() {
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [loading, setLoading] = useState(true)
 
-    // CHANGE: Auth check hata diya — middleware handle karega
     useEffect(() => {
-        fetchStats()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        fetchStats() // Initial fetch (with loading skeleton)
+
+        // ✅ NEW: Auto-refresh dashboard stats every 30 seconds silently
+        const interval = setInterval(() => {
+            fetchStats(true) // silent refresh, no loading spinner
+        }, 30000) // 30 seconds
+
+        return () => clearInterval(interval) // Cleanup on unmount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    const fetchStats = async () => {
+    // ✅ FIX: silent parameter add kiya taaki auto-refresh par loading skeleton flash na ho
+    const fetchStats = async (silent = false) => {
         try {
-            // CHANGE: cache: 'no-store' aur credentials: 'include' add kiya
             const res = await apiFetch('/api/ops/bookings/stats', {
                 cache: 'no-store',
                 credentials: 'include',
@@ -63,7 +69,7 @@ export default function OpsDashboardPage() {
         } catch (error) {
             console.error('Failed to fetch stats:', error)
         } finally {
-            setLoading(false)
+            if (!silent) setLoading(false) // Sirf pehli baar loading dikhayega
         }
     }
 
@@ -87,7 +93,7 @@ export default function OpsDashboardPage() {
                 <div className="text-center">
                     <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">Failed to load dashboard</p>
-                    <Button onClick={fetchStats} className="mt-4">Retry</Button>
+                    <Button onClick={() => fetchStats()} className="mt-4">Retry</Button>
                 </div>
             </div>
         )
@@ -217,8 +223,8 @@ export default function OpsDashboardPage() {
                                         {/* Category Image */}
                                         <div className="h-12 w-12 rounded-lg bg-muted overflow-hidden flex-shrink-0">
                                             {cat.image ? (
-                                                <img 
-                                                    src={cat.image} 
+                                                <img
+                                                    src={cat.image}
                                                     alt={cat.name}
                                                     className="h-full w-full object-cover"
                                                 />
@@ -240,7 +246,7 @@ export default function OpsDashboardPage() {
                                         </div>
 
                                         {/* Count Badge */}
-                                        <Badge 
+                                        <Badge
                                             variant={cat.pendingCount > 0 ? 'default' : 'secondary'}
                                             className="text-lg px-3 py-1"
                                         >

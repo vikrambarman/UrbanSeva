@@ -3,6 +3,7 @@
  * WHY: 
  * - Add new statuses (PAYMENT_RECEIVED, PENDING_CONFIRMATION, RESCHEDULE_PENDING)
  * - Better status visualization with icons
+ * - Silent auto-refresh & debounced search for production readiness
  * NOTE: Backward compatible with old statuses
  */
 
@@ -70,7 +71,7 @@ interface Booking {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// UPDATED: Status badge config with NEW production statuses
+// Status badge config with NEW production statuses
 // ═══════════════════════════════════════════════════════════════
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
     // NEW Production Flow
@@ -98,26 +99,44 @@ export default function OpsBookingsPage() {
 
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false)
+    
+    // Search states
     const [search, setSearch] = useState('')
+    const [debouncedSearch, setDebouncedSearch] = useState('')
+
     const [statusFilter, setStatusFilter] = useState(
         searchParams.get('status') || 'ALL'
     )
     const [categoryFilter, setCategoryFilter] = useState(
         searchParams.get('categoryId') || ''
     )
+    
+    // Pagination states
     const [page, setPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [total, setTotal] = useState(0)
 
-    const fetchBookings = useCallback(async () => {
-        setLoading(true)
+    // ✅ Debounce search input (500ms delay)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search)
+            setPage(1) // Reset to page 1 when search changes
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [search])
+
+    // ✅ Fetch bookings with silent refresh option
+    const fetchBookings = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true)
+        
         try {
             const params = new URLSearchParams()
             params.set('page', page.toString())
             params.set('limit', '20')
             if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter)
             if (categoryFilter) params.set('categoryId', categoryFilter)
-            if (search) params.set('search', search)
+            if (debouncedSearch) params.set('search', debouncedSearch)
 
             const res = await apiFetch(`/api/ops/bookings?${params.toString()}`, {
                 cache: 'no-store',
@@ -133,21 +152,30 @@ export default function OpsBookingsPage() {
         } catch (error) {
             console.error('Failed to fetch bookings:', error)
         } finally {
-            setLoading(false)
+            if (!silent) setLoading(false)
+            setIsRefreshing(false)
         }
-    }, [page, statusFilter, categoryFilter, search])
+    }, [page, statusFilter, categoryFilter, debouncedSearch])
 
+    // ✅ Initial load & filter/page change trigger
     useEffect(() => {
         fetchBookings()
     }, [fetchBookings])
 
+    // ✅ Silent Auto-refresh every 15 seconds
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setPage(1)
-            fetchBookings()
-        }, 500)
-        return () => clearTimeout(timer)
-    }, [search])
+        const interval = setInterval(() => {
+            setIsRefreshing(true)
+            fetchBookings(true) // silent = true
+        }, 15000)
+
+        return () => clearInterval(interval)
+    }, [fetchBookings])
+
+    const handleManualRefresh = () => {
+        setIsRefreshing(true)
+        fetchBookings(true)
+    }
 
     const getStatusBadge = (status: string) => {
         const config = statusConfig[status] || statusConfig.PENDING
@@ -172,11 +200,22 @@ export default function OpsBookingsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold">Bookings Management</h1>
-                <p className="text-muted-foreground mt-1">
-                    {total} total bookings • Page {page} of {totalPages}
-                </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold">Bookings Management</h1>
+                    <p className="text-muted-foreground mt-1">
+                        {total} total bookings • Page {page} of {totalPages}
+                    </p>
+                </div>
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshing}
+                >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
             </div>
 
             {/* Filters */}
@@ -194,7 +233,7 @@ export default function OpsBookingsPage() {
                             />
                         </div>
 
-                        {/* Status Filter - UPDATED with new statuses */}
+                        {/* Status Filter */}
                         <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(1) }}>
                             <SelectTrigger className="w-full sm:w-[200px]">
                                 <Filter className="h-4 w-4 mr-2" />
@@ -202,11 +241,9 @@ export default function OpsBookingsPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">All Status</SelectItem>
-                                {/* NEW Production Flow */}
                                 <SelectItem value="PAYMENT_RECEIVED">Payment Received</SelectItem>
                                 <SelectItem value="PENDING_CONFIRMATION">Awaiting Confirmation</SelectItem>
                                 <SelectItem value="RESCHEDULE_PENDING">Reschedule Pending</SelectItem>
-                                {/* Legacy */}
                                 <SelectItem value="PENDING">Pending</SelectItem>
                                 <SelectItem value="CONFIRMED">Confirmed</SelectItem>
                                 <SelectItem value="PROVIDER_ASSIGNED">Assigned</SelectItem>
@@ -223,7 +260,7 @@ export default function OpsBookingsPage() {
                                 <SelectValue placeholder="All Categories" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All Categories</SelectItem>
+                                <SelectItem value="ALL">All Categories</SelectItem>
                                 <SelectItem value="cleaning">Cleaning</SelectItem>
                                 <SelectItem value="plumbing">Plumbing</SelectItem>
                                 <SelectItem value="electrical">Electrical</SelectItem>
@@ -402,19 +439,19 @@ export default function OpsBookingsPage() {
                             {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="flex items-center justify-between mt-6 pt-4 border-t">
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-sm text-muted-foreground hidden sm:block">
                                         Showing {(page - 1) * 20 + 1} to {Math.min(page * 20, total)} of {total}
                                     </p>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                                         <Button
                                             size="sm"
                                             variant="outline"
                                             disabled={page === 1}
                                             onClick={() => setPage(p => p - 1)}
                                         >
-                                            <ChevronLeft className="h-4 w-4" />
+                                            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                                         </Button>
-                                        <span className="text-sm font-medium">
+                                        <span className="text-sm font-medium px-2">
                                             {page} / {totalPages}
                                         </span>
                                         <Button
@@ -423,7 +460,7 @@ export default function OpsBookingsPage() {
                                             disabled={page === totalPages}
                                             onClick={() => setPage(p => p + 1)}
                                         >
-                                            <ChevronRight className="h-4 w-4" />
+                                            Next <ChevronRight className="h-4 w-4 ml-1" />
                                         </Button>
                                     </div>
                                 </div>

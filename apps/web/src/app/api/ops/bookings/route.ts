@@ -33,9 +33,9 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const page = parseInt(searchParams.get('page') || '1')
         const limit = parseInt(searchParams.get('limit') || '20')
-        const status = searchParams.get('status') // PENDING, CONFIRMED, etc.
-        const search = searchParams.get('search') // booking number, customer name, phone
-        const categoryId = searchParams.get('categoryId') // specific category filter
+        const status = searchParams.get('status') 
+        const search = searchParams.get('search') 
+        const categoryId = searchParams.get('categoryId') 
         const dateFrom = searchParams.get('dateFrom')
         const dateTo = searchParams.get('dateTo')
 
@@ -45,11 +45,22 @@ export async function GET(request: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = {}
 
-        // Category filter — staff ki assigned categories ya specific category
-        if (categoryId) {
+        // ✅ FIXED: Category filter logic
+        if (categoryId && categoryId !== 'ALL') {
             where.service = { subCategory: { categoryId } }
-        } else if (!isAdmin && categoryIds.length > 0) {
-            where.service = { subCategory: { categoryId: { in: categoryIds } } }
+        } else if (!isAdmin) {
+            if (categoryIds.length > 0) {
+                where.service = { subCategory: { categoryId: { in: categoryIds } } }
+            } else {
+                // ✅ SECURITY: Agar staff ko koi category assign nahi hai, toh wo kuch nahi dekh payega
+                return NextResponse.json({
+                    success: true,
+                    data: {
+                        bookings: [],
+                        pagination: { page, limit, total: 0, totalPages: 0 }
+                    }
+                })
+            }
         }
 
         // Status filter
@@ -57,7 +68,7 @@ export async function GET(request: NextRequest) {
             where.status = status
         }
 
-        // Search filter — booking number, customer name, phone
+        // Search filter
         if (search) {
             where.OR = [
                 { bookingNumber: { contains: search, mode: 'insensitive' } },
@@ -134,8 +145,8 @@ export async function GET(request: NextRequest) {
                     }
                 },
                 orderBy: [
-                    { status: 'asc' }, // PENDING first
-                    { scheduledDate: 'asc' }, // Earlier dates first
+                    { status: 'asc' }, 
+                    { scheduledDate: 'asc' }, 
                     { createdAt: 'desc' },
                 ],
                 skip: (page - 1) * limit,

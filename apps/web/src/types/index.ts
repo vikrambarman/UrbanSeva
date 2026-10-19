@@ -1,23 +1,53 @@
-// ═══════════════════════════════
+// ═══════════════════
 // BASE TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
-export type UserRole = 'CUSTOMER' | 'PROVIDER' | 'ADMIN' | 'SUPER_ADMIN'
+export type UserRole = 'CUSTOMER' | 'PROVIDER' | 'ADMIN' | 'SUPER_ADMIN' | 'CALLING_TEAM'
 export type LoyaltyTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM'
+
+// ═══════════════════
+// UPDATED: Booking Status - Production Flow
+// ═══════════════════
 export type BookingStatus =
-  | 'PENDING' | 'CONFIRMED' | 'PROVIDER_ASSIGNED'
-  | 'PROVIDER_TRAVELLING' | 'SERVICE_STARTED'
-  | 'SERVICE_COMPLETED' | 'CANCELLED'
-  | 'REFUND_INITIATED' | 'REFUNDED'
+  // Legacy
+  | 'PENDING' 
+  | 'CONFIRMED'
+  // New Production Flow
+  | 'PAYMENT_RECEIVED'
+  | 'PENDING_CONFIRMATION'
+  | 'RESCHEDULE_PENDING'
+  // Service Execution
+  | 'PROVIDER_ASSIGNED'
+  | 'PROVIDER_TRAVELLING'
+  | 'SERVICE_STARTED'
+  | 'SERVICE_COMPLETED'
+  // Terminal States
+  | 'CANCELLED'
+  | 'CANCELLED_BY_CUSTOMER'
+  | 'CANCELLED_BY_OPS'
+  | 'CANCELLED_BY_PROVIDER'
+  | 'NO_SHOW'
+  | 'FAILED'
+  | 'REFUND_INITIATED'
+  | 'REFUNDED'
+
+// ═══════════════════
+// UPDATED: Payment Status
+// ═══════════════════
 export type PaymentStatus =
-  | 'PENDING' | 'PAID' | 'FAILED'
-  | 'REFUNDED' | 'PARTIALLY_REFUNDED'
+  | 'PENDING' 
+  | 'PAID' 
+  | 'FAILED'
+  | 'REFUND_INITIATED'
+  | 'REFUNDED' 
+  | 'PARTIALLY_REFUNDED'
+
 export type PriceType =
   | 'FIXED' | 'STARTING_AT' | 'PER_SQFT' | 'CUSTOM_QUOTE'
 
-// ═══════════════════════════════
+// ═══════════════════
 // USER TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface User {
   id: string
@@ -36,9 +66,9 @@ export interface User {
   updatedAt: Date
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // ADDRESS TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface Address {
   id: string
@@ -53,9 +83,9 @@ export interface Address {
   isDefault: boolean
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // CATEGORY TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface Category {
   id: string
@@ -66,6 +96,8 @@ export interface Category {
   description: string | null
   sortOrder: number
   isActive: boolean
+  gstEnabled: boolean
+  gstPercentage: number
   createdAt: Date
 }
 
@@ -84,9 +116,9 @@ export interface CategoryWithSubs extends Category {
   subCategories: SubCategory[]
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // SERVICE TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface ServiceInclusion {
   id: string
@@ -159,9 +191,9 @@ export interface ServiceWithDetails extends Service {
   faqs: ServiceFAQ[]
 }
 
-// ═══════════════════════════════
-// BOOKING TYPES
-// ═══════════════════════════════
+// ═══════════════════
+// UPDATED: BOOKING TYPES
+// ═══════════════════
 
 export interface Booking {
   id: string
@@ -171,6 +203,7 @@ export interface Booking {
   serviceId: string
   addressId: string
   pricingLabel: string | null
+  addOns: any | null
   scheduledDate: Date
   scheduledTime: string
   status: BookingStatus
@@ -179,7 +212,17 @@ export interface Booking {
   discountAmount: number
   couponCode: string | null
   totalAmount: number
+  gstAmount: number
   paymentStatus: PaymentStatus
+  paymentMethod: string | null
+  razorpayOrderId: string | null
+  razorpayPaymentId: string | null
+  razorpayPaymentLinkId: string | null
+  razorpayPaymentLinkUrl: string | null
+  codAmountCollected: number | null
+  codVerifiedBy: string | null
+  codVerifiedAt: Date | null
+  codDisputed: boolean
   specialInstructions: string | null
   createdAt: Date
   updatedAt: Date
@@ -189,11 +232,30 @@ export interface BookingWithAll extends Booking {
   user: User
   service: Service
   address: Address
+  provider?: Provider
 }
 
-// ═══════════════════════════════
+// ═══════════════════
+// NEW: PROVIDER TYPES
+// ═══════════════════
+
+export interface Provider {
+  id: string
+  userId: string
+  bio: string | null
+  experience: number
+  avgRating: number
+  totalJobs: number
+  totalEarnings: number
+  isAvailable: boolean
+  status: string
+  currentWorkStatus?: string
+  currentJobId?: string | null
+}
+
+// ═══════════════════
 // REVIEW TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface Review {
   id: string
@@ -205,9 +267,9 @@ export interface Review {
   createdAt: Date
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // ADDON ITEM (Booking Store)
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface AddOnItem {
   id: string
@@ -216,9 +278,9 @@ export interface AddOnItem {
   description?: string | null
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // SEARCH + FILTERS
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface SearchFilters {
   query?: string
@@ -230,9 +292,9 @@ export interface SearchFilters {
   sortBy?: 'price' | 'rating' | 'popularity'
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // API RESPONSE
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface ApiResponse<T> {
   success: boolean
@@ -249,9 +311,9 @@ export interface PaginatedResponse<T> {
   hasMore: boolean
 }
 
-// ═══════════════════════════════
+// ═══════════════════
 // NAV TYPES
-// ═══════════════════════════════
+// ═══════════════════
 
 export interface NavItem {
   label: string

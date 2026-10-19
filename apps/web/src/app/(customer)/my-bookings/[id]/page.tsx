@@ -16,14 +16,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  User, 
-  Phone, 
-  ArrowLeft, 
-  Star, 
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  User,
+  Phone,
+  ArrowLeft,
+  Star,
   MessageCircle,
   CheckCircle2,
   Circle,
@@ -94,7 +94,34 @@ export default function BookingDetailPage() {
     fetchBooking()
   }, [params.id])
 
-  const fetchBooking = async () => {
+
+  useEffect(() => {
+    fetchBooking()
+  }, [params.id])
+
+  // ✅ NEW: Auto-refresh every 10 seconds for active bookings
+  useEffect(() => {
+    if (!booking) return
+
+    // Terminal states jahan polling band ho jani chahiye
+    const terminalStatuses = [
+      'SERVICE_COMPLETED', 'CANCELLED', 'CANCELLED_BY_CUSTOMER',
+      'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER', 'REFUNDED', 'REFUND_INITIATED'
+    ]
+    const isTerminal = terminalStatuses.includes(booking.status)
+
+    // Agar booking active hai, toh har 10 second mein refresh karo
+    if (isTerminal) return
+
+    const interval = setInterval(() => {
+      fetchBooking(true) // silent refresh
+    }, 10000) // 10 seconds
+
+    return () => clearInterval(interval)
+  }, [booking?.status, params.id])
+
+  // ✅ FIX: silent parameter add kiya taaki polling mein UI flash na ho
+  const fetchBooking = async (silent = false) => {
     try {
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/bookings/${params.id}`, {
@@ -105,21 +132,25 @@ export default function BookingDetailPage() {
       if (data.success) {
         setBooking(data.data)
       } else {
-        toast.error('Booking not found')
-        router.push('/my-bookings')
+        if (!silent) {
+          toast.error('Booking not found')
+          router.push('/my-bookings')
+        }
       }
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Failed to load booking')
+      if (!silent) toast.error('Failed to load booking')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      PAYMENT_RECEIVED: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      PENDING_CONFIRMATION: 'bg-blue-100 text-blue-800 border-blue-200',
+      // ✅ FIX: PAYMENT_RECEIVED means money actually received (ONLINE) → green
+      PAYMENT_RECEIVED: 'bg-green-100 text-green-800 border-green-200',
+      // ✅ FIX: PENDING_CONFIRMATION means waiting (POD/COD not paid yet) → amber
+      PENDING_CONFIRMATION: 'bg-amber-100 text-amber-800 border-amber-200',
       RESCHEDULE_PENDING: 'bg-orange-100 text-orange-800 border-orange-200',
       PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       CONFIRMED: 'bg-blue-100 text-blue-800 border-blue-200',
@@ -138,7 +169,8 @@ export default function BookingDetailPage() {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       PAYMENT_RECEIVED: 'Payment Received',
-      PENDING_CONFIRMATION: 'Awaiting Confirmation',
+      // ✅ FIX: Clearer label for POD/COD pending state
+      PENDING_CONFIRMATION: 'Pending Confirmation',
       RESCHEDULE_PENDING: 'Reschedule Pending',
       PENDING: 'Pending',
       CONFIRMED: 'Confirmed',
@@ -168,25 +200,30 @@ export default function BookingDetailPage() {
   }
 
   const handleCancelBooking = async () => {
-    if (!confirm('Are you sure you want to cancel this booking?')) return
+    if (!confirm('Are you sure you want to cancel this booking? Refund will be processed based on cancellation policy.')) return
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/bookings/${params.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/bookings/${params.id}/cancel`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          status: 'CANCELLED',
-          cancelReason: 'Cancelled by customer',
+          reason: 'Cancelled by customer',
+          cancelledBy: 'CUSTOMER',
         }),
       })
 
       const data = await response.json()
       if (data.success) {
-        toast.success('Booking cancelled successfully')
+        const { refundAmount, refundPercentage } = data.data
+        if (refundAmount > 0) {
+          toast.success(`Booking cancelled. Refund of ₹${refundAmount} (${refundPercentage}%) will be processed.`)
+        } else {
+          toast.success('Booking cancelled successfully.')
+        }
         fetchBooking()
       } else {
         toast.error(data.error || 'Failed to cancel booking')
@@ -434,8 +471,19 @@ export default function BookingDetailPage() {
                   <span className="text-primary">₹{booking.totalAmount}</span>
                 </div>
                 <div className="pt-2 space-y-2">
-                  <Badge className={booking.paymentStatus === 'PAID' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}>
-                    {booking.paymentStatus}
+                  {/* ✅ FIX: Show meaningful label based on payment method, not just raw status */}
+                  <Badge className={
+                    booking.paymentStatus === 'PAID'
+                      ? 'bg-green-100 text-green-800 border-green-200'
+                      : 'bg-amber-100 text-amber-800 border-amber-200'
+                  }>
+                    {booking.paymentStatus === 'PAID'
+                      ? 'Paid'
+                      : booking.paymentMethod === 'POD'
+                        ? 'Pay on Delivery - Pending'
+                        : booking.paymentMethod === 'COD'
+                          ? 'Cash on Delivery - Pending'
+                          : booking.paymentStatus}
                   </Badge>
                   {booking.paymentMethod && (
                     <p className="text-xs text-muted-foreground">

@@ -10,13 +10,30 @@ export async function GET(request: NextRequest) {
         const provider = await db.provider.findUnique({ where: { userId: providerAuth.userId } })
         if (!provider) return NextResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
 
+        // ✅ FIX: Include provider relation for complete data
         const payouts = await db.payout.findMany({
             where: { providerId: provider.id },
+            include: {
+                provider: {
+                    include: {
+                        user: { select: { name: true, phone: true } }
+                    }
+                }
+            },
             orderBy: { createdAt: 'desc' }
         })
 
-        return NextResponse.json({ success: true, data: payouts })
+        // ✅ FIX: Add cache headers to prevent stale data
+        return NextResponse.json(
+            { success: true, data: payouts },
+            {
+                headers: {
+                    'Cache-Control': 'no-store, max-age=0'
+                }
+            }
+        )
     } catch (error) {
+        console.error('Fetch payouts error:', error)
         return NextResponse.json({ success: false, error: 'Failed to fetch payouts' }, { status: 500 })
     }
 }
@@ -40,12 +57,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Minimum payout amount is ₹500' }, { status: 400 })
         }
 
+        // Check if there's already a pending payout
+        const existingPending = await db.payout.findFirst({
+            where: { providerId: provider.id, status: 'PENDING' }
+        })
+
+        if (existingPending) {
+            return NextResponse.json({ success: false, error: 'You already have a pending payout request' }, { status: 400 })
+        }
+
         // Create payout
         const payout = await db.payout.create({
             data: {
                 providerId: provider.id,
                 amount,
-                method: provider.upiId ? 'UPI' : 'BANK_TRANSFER',
+                method: provider.upiId ? 'UPI' : provider.bankAccount ? 'BANK_TRANSFER' : 'CASH',
                 status: 'PENDING'
             }
         })
@@ -58,6 +84,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ success: true, data: payout })
     } catch (error) {
+        console.error('Create payout error:', error)
         return NextResponse.json({ success: false, error: 'Failed to request payout' }, { status: 500 })
     }
 }

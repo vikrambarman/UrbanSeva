@@ -18,6 +18,7 @@ export async function GET(
                 service: true,
                 address: true,
                 review: true,
+                payment: true, // ✅ FIX: Payment relation include kiya
                 statusHistory: { orderBy: { createdAt: 'desc' } }
             }
         })

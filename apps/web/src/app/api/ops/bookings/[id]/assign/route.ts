@@ -72,6 +72,16 @@ export async function POST(
             )
         }
 
+
+         // ✅ NEW: Check if booking is confirmed before assigning
+        const validStatusesForAssign = ['CONFIRMED', 'PROVIDER_ASSIGNED', 'PROVIDER_TRAVELLING']
+        if (!validStatusesForAssign.includes(booking.status)) {
+            return NextResponse.json(
+                { success: false, error: 'Please confirm the booking first before assigning a provider.' },
+                { status: 400 }
+            )
+        }
+
         // ═══════════════════════════════════════════════════════════════
         // NEW: Check provider work status
         // ═══════════════════════════════════════════════════════════════

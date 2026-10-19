@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Wallet } from "lucide-react"
+import { ArrowLeft, RefreshCw, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api-client"
 import Link from "next/link"
@@ -17,9 +17,9 @@ export default function ProviderPayoutsPage() {
     const fetchPayouts = async () => {
         setLoading(true)
         try {
-            // ✅ FIX: Response object milega
-            const res = await apiFetch('/api/provider/earnings/payouts')
-            // ✅ FIX: Parse karo
+            const res = await apiFetch('/api/provider/earnings/payouts', {
+                cache: 'no-store'  // ✅ Prevent caching
+            })
             const data = await res.json()
 
             if (data.success) setPayouts(data.data)
@@ -62,6 +62,19 @@ export default function ProviderPayoutsPage() {
                     <h1 className="text-3xl font-bold tracking-tight">Payout History</h1>
                     <p className="text-muted-foreground">Track your payout requests.</p>
                 </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+                <CardHeader><CardTitle>Payout History</CardTitle></CardHeader>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchPayouts}
+                    disabled={loading}
+                >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
             </div>
 
             <Card>

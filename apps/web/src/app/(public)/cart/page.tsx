@@ -85,25 +85,22 @@ export default function CartPage() {
   // ═══════════════════════════════════════════════════════════════
   // NEW: Checkout handler with login check
   // ═══════════════════════════════════════════════════════════════
-  const handleCheckout = () => {
-    // Login check
+const handleCheckout = () => {
     if (!isAuthenticated) {
-      toast.info('Please login to continue')
-      router.push('/login?redirect=/cart')
-      return
+        toast.info('Please login to continue')
+        router.push('/login?redirect=/cart')
+        return
     }
 
-    // Cart empty check
     if (items.length === 0) {
-      toast.error('Your cart is empty')
-      return
+        toast.error('Your cart is empty')
+        return
     }
 
-    // Redirect to first item's schedule page
-    // Payment page will handle all items
+    // ✅ FIX: Redirect to first item's schedule, but payment page will handle all items
     const firstItem = items[0]
-    router.push(`/booking/${firstItem.serviceId}/schedule`)
-  }
+    router.push(`/booking/${firstItem.serviceId}/schedule?cart=all`)  // ✅ Pass cart flag
+}
 
   // ─────────────────────────────────────────────────────────────
   // EMPTY CART STATE

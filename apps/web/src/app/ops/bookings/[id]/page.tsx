@@ -48,7 +48,7 @@ interface BookingDetail {
     specialInstructions: string | null
     cancelReason: string | null
     createdAt: string
-    
+
     // ═══════════════════════════════
     // NEW: Payment Fields
     // ═══════════════════════════════
@@ -59,7 +59,7 @@ interface BookingDetail {
     codVerifiedBy: string | null
     codVerifiedAt: string | null
     gstAmount: number
-    
+
     user: { id: string; name: string | null; phone: string; email: string | null }
     service: {
         id: string; name: string; image: string | null; basePrice: number
@@ -175,9 +175,10 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bookingId])
 
-    const fetchBooking = async () => {
+    // ✅ FIX: silent parameter add kiya taaki polling mein loading skeleton flash na ho
+    const fetchBooking = async (silent = false) => {
         if (!bookingId) return
-        setLoading(true)
+        if (!silent) setLoading(true)
         try {
             const res = await apiFetch(`/api/ops/bookings/${bookingId}`, {
                 cache: 'no-store',
@@ -187,12 +188,12 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
             if (data.success) {
                 setBooking(data.data)
             } else {
-                toast.error(data.error || 'Failed to load booking')
+                if (!silent) toast.error(data.error || 'Failed to load booking')
             }
         } catch {
-            toast.error('Failed to load booking')
+            if (!silent) toast.error('Failed to load booking')
         } finally {
-            setLoading(false)
+            if (!silent) setLoading(false)
         }
     }
 
@@ -202,6 +203,32 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [assignModal])
+
+
+    // ✅ UPDATED: Auto-refresh every 10 seconds for active bookings AND pending POD payments
+    useEffect(() => {
+        if (!booking) return
+
+        const terminalStatuses = [
+            'SERVICE_COMPLETED', 'CANCELLED', 'CANCELLED_BY_CUSTOMER',
+            'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER', 'REFUNDED', 'REFUND_INITIATED'
+        ]
+        const isTerminal = terminalStatuses.includes(booking.status)
+
+        const isPOD = booking.paymentMethod === 'POD' || booking.paymentMethod === 'COD'
+        const isPaymentPending = isPOD && booking.paymentStatus !== 'PAID'
+
+        // Polling tab tak chalegi jab tak booking active hai YA payment pending hai
+        if (isTerminal && !isPaymentPending) return
+
+        const interval = setInterval(() => {
+            fetchBooking(true) // silent refresh, no loading spinner
+        }, 10000) // 10 seconds
+
+        return () => clearInterval(interval)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [booking?.status, booking?.paymentStatus, booking?.paymentMethod, bookingId])
+
 
     const fetchProvidersForCategory = async () => {
         setSearchingProviders(true)
@@ -242,6 +269,28 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
             toast.error('Failed to search providers')
         } finally {
             setSearchingProviders(false)
+        }
+    }
+
+
+    const handleConfirm = async () => {
+        setActionLoading(true)
+        try {
+            const res = await apiFetch(`/api/ops/bookings/${bookingId}/confirm`, {
+                method: 'POST',
+                credentials: 'include',
+            })
+            const data = await res.json()
+            if (data.success) {
+                toast.success('Booking confirmed successfully!')
+                fetchBooking()
+            } else {
+                toast.error(data.error || 'Failed to confirm booking')
+            }
+        } catch {
+            toast.error('Failed to confirm booking')
+        } finally {
+            setActionLoading(false)
         }
     }
 
@@ -413,12 +462,14 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // UPDATED: canAssign logic - Include new statuses
+    // UPDATED: Action permissions based on 2-step flow
     // ═══════════════════════════════════════════════════════════════
-    const canAssign = ['PENDING', 'CONFIRMED', 'PAYMENT_RECEIVED', 'PENDING_CONFIRMATION'].includes(booking.status)
+    const canConfirm = ['PENDING', 'PAYMENT_RECEIVED', 'PENDING_CONFIRMATION'].includes(booking.status)
+    const canAssign = booking.status === 'CONFIRMED' // Sirf confirm hone ke baad hi assign ka option aayega
     const canChangeProvider = ['PROVIDER_ASSIGNED', 'PROVIDER_TRAVELLING'].includes(booking.status) && booking.provider
     const canReschedule = !['CANCELLED', 'REFUNDED', 'SERVICE_COMPLETED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER'].includes(booking.status)
     const canCancel = !['CANCELLED', 'REFUNDED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER'].includes(booking.status)
+
 
     return (
         <div className="space-y-6">
@@ -446,6 +497,18 @@ export default function OpsBookingDetailPage({ params }: { params: Promise<{ id:
 
                 {/* Quick Actions */}
                 <div className="flex items-center gap-2 flex-wrap">
+                    {/* ✅ NEW: Confirm Booking Button */}
+                    {canConfirm && (
+                        <Button onClick={handleConfirm} disabled={actionLoading} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                            {actionLoading ? (
+                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                            )}
+                            Confirm Booking
+                        </Button>
+                    )}
+
                     {canAssign && (
                         <Button onClick={() => { setIsChangingProvider(false); setAssignModal(true) }} size="sm">
                             <UserPlus className="h-4 w-4 mr-1" />

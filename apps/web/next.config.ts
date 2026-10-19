@@ -1,6 +1,12 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  // ✅ FIX: Ngrok domain ko allowed origins mein add karo
+  allowedDevOrigins: [
+    '192.168.29.115',
+    'congress-prominent-reviving.ngrok-free.dev', // ✅ Tumhara current ngrok URL
+  ],
+
   images: {
     remotePatterns: [
       {
@@ -20,9 +26,13 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'maps.googleapis.com',
       },
+      // ✅ FIX: Agar tum local uploads ko ngrok ke through serve kar rahe ho, toh ye add karo
+      {
+        protocol: 'https',
+        hostname: 'congress-prominent-reviving.ngrok-free.dev',
+      },
     ],
   },
-
 
   async headers() {
     return [
@@ -48,7 +58,8 @@ const nextConfig: NextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          // ️ FIX: Static assets ke liye cache-control thoda relax karo testing ke liye
+          // { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }, 
         ],
       },
 

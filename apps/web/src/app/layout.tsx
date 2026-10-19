@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { SITE_CONFIG, getSiteTitle, getSiteDescription } from "@/lib/config";
+import Script from "next/script";
 
 const urbanist = Urbanist({
   variable: "--font-urbanist",
@@ -85,15 +86,14 @@ export const metadata: Metadata = {
     description,
     images: [SITE_CONFIG.ogImage],
   },
-  // verification: { google: "xxxxxxxxxxxx" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#0D9488" },  // ✅ orange → teal
-    { media: "(prefers-color-scheme: dark)", color: "#1E3A5F" },   // unchanged
+    { media: "(prefers-color-scheme: light)", color: "#0D9488" },
+    { media: "(prefers-color-scheme: dark)", color: "#1E3A5F" },
   ],
 };
 
@@ -103,12 +103,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // ✅ FIXED: Font variable classes ab <html> par hain, <body> par nahi.
-    // Pehle ye <body> par the, jabki globals.css mein `html { font-sans }`
-    // apply hota hai — <html>, <body> ka PARENT hai, aur CSS variables sirf
-    // neeche (descendants) ki taraf inherit hote hain, upar nahi. Isliye
-    // <html> ko --font-urbanist kabhi mila hi nahi, aur browser default
-    // serif font par fallback ho gaya tha.
     <html
       lang="en"
       suppressHydrationWarning
@@ -142,6 +136,13 @@ export default function RootLayout({
             }),
           }}
         />
+
+        {/* ✅ FIXED: Changed from lazyOnload to afterInteractive */}
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="afterInteractive"
+        />
+
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

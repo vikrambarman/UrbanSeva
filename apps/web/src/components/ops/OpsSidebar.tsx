@@ -10,7 +10,9 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { 
     LayoutDashboard, Calendar, Activity, X, Headphones, LogOut,
-    DollarSign
+    DollarSign,
+    CreditCard,
+    FolderOpen
 } from "lucide-react"
 import { useAuthStore } from "@/store/authStore"
 import { toast } from "sonner"
@@ -29,8 +31,15 @@ const navigation = [
         items: [
             { href: "/ops/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/ops/bookings", label: "All Bookings", icon: Calendar },
-            { href: '/ops/finance', label: 'Finance', icon: DollarSign },
+            { href: "/ops/categories", label: "Categories (GST)", icon: FolderOpen },  // ✅ NEW
             { href: "/ops/activity", label: "Activity Log", icon: Activity },
+        ]
+    },
+    {
+        title: "Finance",
+        items: [
+            { href: "/ops/finance", label: "Overview", icon: DollarSign },
+            { href: "/ops/payouts", label: "Payouts", icon: CreditCard },  // ✅ NEW
         ]
     }
 ]

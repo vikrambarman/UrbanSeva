@@ -16,10 +16,21 @@ export async function GET(request: NextRequest) {
         const where: any = { providerId: provider.id }
         if (status !== 'ALL') where.status = status
 
+        // ✅ FIX: Only using `select` now (removed duplicate `include`)
         const bookings = await db.booking.findMany({
             where,
             orderBy: { scheduledDate: 'desc' },
-            include: {
+            select: {
+                id: true,
+                bookingNumber: true,
+                status: true,
+                scheduledDate: true,
+                scheduledTime: true,
+                totalAmount: true,
+                paymentMethod: true,
+                paymentStatus: true,
+                razorpayPaymentLinkUrl: true,
+                razorpayPaymentLinkId: true,
                 user: { select: { name: true, phone: true } },
                 service: { select: { name: true, image: true, duration: true } },
                 address: { select: { fullAddress: true, area: true, landmark: true } },

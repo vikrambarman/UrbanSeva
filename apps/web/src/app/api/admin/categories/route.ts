@@ -1,30 +1,18 @@
-// apps/web/src/app/api/admin/categories/route.ts
-/**
- * WHAT: Admin API to fetch all categories
- * WHY: Admin panel mein categories list dikhane ke liye
- * NOTE: GST fields bhi return karega
- */
-
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { verifyToken } from '@/lib/auth'
+import { getAdminUser } from '@/lib/auth'
+import { getCallingTeamUser } from '@/lib/auth'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
-        const authHeader = request.headers.get('authorization')
-        if (!authHeader?.startsWith('Bearer ')) {
+        // ✅ Support both Admin and OPS users
+        const admin = await getAdminUser(request)
+        const opsUser = await getCallingTeamUser(request)
+        
+        if (!admin && !opsUser) {
             return NextResponse.json(
                 { success: false, error: 'Unauthorized' },
                 { status: 401 }
-            )
-        }
-
-        const token = authHeader.substring(7)
-        const payload = verifyToken(token)
-        if (!payload || (payload.role !== 'ADMIN' && payload.role !== 'SUPER_ADMIN')) {
-            return NextResponse.json(
-                { success: false, error: 'Forbidden' },
-                { status: 403 }
             )
         }
 
@@ -33,25 +21,21 @@ export async function GET(request: Request) {
                 subCategories: {
                     include: {
                         services: {
-                            select: {
-                                id: true,
-                                name: true,
-                                basePrice: true,
-                                isActive: true,
-                            },
-                        },
-                    },
-                },
+                            select: { id: true }
+                        }
+                    }
+                }
             },
-            orderBy: { sortOrder: 'asc' },
+            orderBy: { sortOrder: 'asc' }
         })
 
         return NextResponse.json({
             success: true,
-            data: categories,
+            data: categories
         })
+
     } catch (error) {
-        console.error('Get Categories Error:', error)
+        console.error('Fetch categories error:', error)
         return NextResponse.json(
             { success: false, error: 'Failed to fetch categories' },
             { status: 500 }

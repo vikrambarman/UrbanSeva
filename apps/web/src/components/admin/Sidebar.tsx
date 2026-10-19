@@ -7,10 +7,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { 
-    LayoutDashboard, Users, Briefcase, UserPlus, Wrench, Calendar, 
+import {
+    LayoutDashboard, Users, Briefcase, UserPlus, Wrench, Calendar,
     IndianRupee, Wallet, RotateCcw, Image, HelpCircle, Settings, X,
-    FileText, TrendingUp, Headphones
+    FileText, TrendingUp, Headphones,
+    FolderOpen
 } from "lucide-react"
 
 interface SidebarProps {
@@ -37,9 +38,9 @@ const navigation = [
     {
         title: "Operations",
         items: [
+            { href: "/admin/categories", label: "Categories", icon: FolderOpen },  // ✅ NEW
             { href: "/admin/services", label: "Services", icon: Wrench },
             { href: "/admin/bookings", label: "Bookings", icon: Calendar },
-            // CHANGE: NEW — Calling Team / Staff management
             { href: "/admin/staff", label: "Calling Team", icon: Headphones },
         ]
     },
@@ -69,9 +70,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <>
             {/* Mobile Overlay */}
             {isOpen && (
-                <div 
-                    className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden" 
-                    onClick={onClose} 
+                <div
+                    className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
+                    onClick={onClose}
                 />
             )}
 
@@ -110,8 +111,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                                             onClick={onClose}
                                             className={cn(
                                                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                                                isActive 
-                                                    ? "bg-primary/10 text-primary" 
+                                                isActive
+                                                    ? "bg-primary/10 text-primary"
                                                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                                             )}
                                         >

@@ -3,7 +3,7 @@
  * WHY: 
  * - Use existing addressId from cart (not create new address every time)
  * - Initial status: PAYMENT_RECEIVED (OPS verification pending)
- * - Support both ONLINE and COD payment methods
+ * - Support both ONLINE and POD payment methods
  * - GST calculation based on category settings (inclusive pricing)
  * - Send notification to customer after booking creation
  * NOTE: Backward compatible - old code will still work
@@ -46,6 +46,10 @@ export async function POST(request: Request) {
             baseAmount,
             addOnAmount,
             totalAmount,
+            pricingLabel,
+            addOns,
+            couponCode,
+            discountAmount,
         } = body
 
         // Validate required fields
@@ -82,12 +86,8 @@ export async function POST(request: Request) {
         }
 
         // ═══════════════════════════════
-        // NEW: GST Calculation (Inclusive Pricing)
+        // GST Calculation (Inclusive Pricing)
         // ═══════════════════════════════
-        // KYA: Category se GST fetch karke breakdown calculate karna
-        // KYUN: Customer ko sirf totalAmount dikhega (inclusive)
-        //       Backend accounting ke liye base + GST alag karenge
-        
         const service = await db.service.findUnique({
             where: { id: serviceId },
             include: {
@@ -108,20 +108,24 @@ export async function POST(request: Request) {
 
         const category = service.subCategory.category
         const gstRate = category.gstEnabled ? category.gstPercentage / 100 : 0
-        
+
         // totalAmount is inclusive of GST
-        // baseAmount = totalAmount / (1 + gstRate)
-        // gstAmount = totalAmount - baseAmount
         const finalTotalAmount = totalAmount || (baseAmount + (addOnAmount || 0))
-        const calculatedBaseAmount = gstRate > 0 
-            ? finalTotalAmount / (1 + gstRate) 
+        const calculatedBaseAmount = gstRate > 0
+            ? finalTotalAmount / (1 + gstRate)
             : finalTotalAmount
         const calculatedGstAmount = finalTotalAmount - calculatedBaseAmount
 
         // Generate booking number
         const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`
 
-        // Create booking with NEW status flow
+        const isPOD = paymentMethod === 'POD' || paymentMethod === 'COD'
+        // Dono cases mein status PENDING rahega. 
+        // ONLINE ke liye verify API mein update hoga, POD ke liye OPS confirm karegi.
+        const initialStatus = 'PENDING'
+        const initialPaymentStatus = 'PENDING' // Hamesha PENDING se start hoga
+
+        // Create booking with all fields
         const booking = await db.booking.create({
             data: {
                 bookingNumber,
@@ -130,14 +134,18 @@ export async function POST(request: Request) {
                 addressId: finalAddressId,
                 scheduledDate: new Date(scheduledDate),
                 scheduledTime,
+                pricingLabel,
+                addOns: addOns || null,
                 baseAmount: calculatedBaseAmount,
                 addOnAmount: addOnAmount || 0,
+                discountAmount: discountAmount || 0,
+                couponCode: couponCode || null,
                 totalAmount: finalTotalAmount,
                 gstAmount: calculatedGstAmount,
                 specialInstructions,
                 paymentMethod: paymentMethod || 'ONLINE',
-                status: 'PAYMENT_RECEIVED',
-                paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
+                status: initialStatus,
+                paymentStatus: initialPaymentStatus,
             },
             include: {
                 service: true,
@@ -151,6 +159,14 @@ export async function POST(request: Request) {
             },
         })
 
+        // ✅ NEW: Update Coupon usage count if applied
+        if (couponCode) {
+            await db.coupon.update({
+                where: { code: couponCode },
+                data: { usedCount: { increment: 1 } }
+            }).catch(err => console.error('Coupon update error:', err))
+        }
+
         // Create payment record
         await db.payment.create({
             data: {
@@ -158,7 +174,7 @@ export async function POST(request: Request) {
                 amount: finalTotalAmount,
                 currency: 'INR',
                 method: paymentMethod || 'ONLINE',
-                status: paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
+                status: initialPaymentStatus,
             },
         })
 
@@ -166,9 +182,9 @@ export async function POST(request: Request) {
         await db.bookingStatusHistory.create({
             data: {
                 bookingId: booking.id,
-                status: 'PAYMENT_RECEIVED',
-                note: paymentMethod === 'COD' 
-                    ? 'Booking created via POD (Payment on Delivery)' 
+                status: initialStatus,
+                note: isPOD
+                    ? 'Booking created via POD (Payment on Delivery). Waiting for OPS confirmation and provider assignment.'
                     : 'Payment received, waiting for OPS confirmation',
                 changedBy: payload.userId,
             },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -32,11 +32,17 @@ interface Service {
 interface PricingSelectorProps {
   service: Service
   onPriceChange?: (label: string, price: number) => void
+  defaultSelectedId?: string  // ✅ NEW: Auto-select first tier
 }
 
-export function PricingSelector({ service, onPriceChange }: PricingSelectorProps) {
+export function PricingSelector({ 
+  service, 
+  onPriceChange,
+  defaultSelectedId 
+}: PricingSelectorProps) {
+  // ✅ FIX: Initialize with first tier ID
   const [selectedTier, setSelectedTier] = useState<string>(
-    service.pricingTiers[0]?.id || ''
+    defaultSelectedId || service.pricingTiers[0]?.id || ''
   )
   const [sqft, setSqft] = useState<string>('')
 
@@ -47,6 +53,15 @@ export function PricingSelector({ service, onPriceChange }: PricingSelectorProps
       onPriceChange(tier.label, tier.price)
     }
   }
+
+  // ✅ FIX: Notify parent on mount with default selection
+  useEffect(() => {
+    if (service.pricingTiers.length > 0 && onPriceChange) {
+      const firstTier = service.pricingTiers[0]
+      onPriceChange(firstTier.label, firstTier.price)
+    }
+  }, [])
+
 
   const handleSqftChange = (value: string) => {
     setSqft(value)

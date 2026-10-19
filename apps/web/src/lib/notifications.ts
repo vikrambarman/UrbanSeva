@@ -269,3 +269,42 @@ export async function generateAndSendRescheduleOTP(
 
   return { otp, expiresAt }
 }
+
+
+// ═══════════════════════════════
+// CANCELLATION NOTIFICATIONS
+// ═══════════════════════════════
+
+/**
+ * WHAT: Booking cancelled notification
+ * WHY: Customer ko cancellation aur refund ka pata chalega
+ */
+export async function sendBookingCancelled(
+  userId: string,
+  phone: string,
+  bookingNumber: string,
+  refundAmount: number,
+  reason: string
+) {
+  // In-app notification
+  await sendNotification({
+    userId,
+    title: 'Booking Cancelled',
+    body: `Your booking #${bookingNumber} has been cancelled. ${refundAmount > 0 ? `Refund of ₹${refundAmount} will be processed.` : ''} Reason: ${reason}`,
+    type: 'GENERAL',
+    referenceId: bookingNumber,
+  })
+
+  // SMS notification
+  const smsMessage = refundAmount > 0
+    ? `Booking #${bookingNumber} cancelled. Refund of Rs.${refundAmount} will be processed within 5-7 days. Reason: ${reason}. - HomeServices`
+    : `Booking #${bookingNumber} cancelled. Reason: ${reason}. - HomeServices`
+
+  await sendSMS({
+    phone,
+    message: smsMessage,
+    type: 'GENERAL',
+  })
+
+  return { success: true }
+}

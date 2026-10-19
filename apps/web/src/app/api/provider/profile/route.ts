@@ -1,3 +1,5 @@
+// apps/web/src/app/api/provider/profile/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderUser } from '@/lib/auth'
@@ -31,19 +33,13 @@ export async function PUT(request: NextRequest) {
 
         const body = await request.json()
 
-        // Update user basic info
         if (body.name || body.email) {
             await db.user.update({
                 where: { id: provider.userId },
-                data: {
-                    name: body.name,
-                    email: body.email,
-                    avatar: body.avatar,
-                }
+                data: { name: body.name, email: body.email, avatar: body.avatar }
             })
         }
 
-        // Update provider specific info
         const updatedProvider = await db.provider.update({
             where: { userId: provider.userId },
             data: {

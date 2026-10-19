@@ -1,7 +1,7 @@
 /**
- * WHAT: Booking Store with payment method support
- * WHY: Production flow mein payment method selection zaroori hai (ONLINE/COD)
- * NOTE: Added paymentMethod field
+ * WHAT: Booking Store with POD payment method support
+ * WHY: Production flow mein payment method selection zaroori hai (ONLINE/POD)
+ * NOTE: POD = Payment on Delivery (payment link after service)
  */
 
 import { create } from 'zustand'
@@ -38,7 +38,7 @@ interface BookingState {
   couponCode: string | null
   discountAmount: number
   totalAmount: number
-  paymentMethod: 'ONLINE' | 'COD' | null // NEW: Payment method
+  paymentMethod: 'ONLINE' | 'POD' | null
   currentStep: number
 
   setService: (info: ServiceInfo) => void
@@ -49,7 +49,7 @@ interface BookingState {
   setAddress: (addressId: string) => void
   applyCoupon: (code: string, discount: number) => void
   removeCoupon: () => void
-  setPaymentMethod: (method: 'ONLINE' | 'COD') => void // NEW: Set payment method
+  setPaymentMethod: (method: 'ONLINE' | 'POD') => void
   setStep: (step: number) => void
   calculateTotal: () => void
   clearBooking: () => void
@@ -71,7 +71,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   couponCode: null,
   discountAmount: 0,
   totalAmount: 0,
-  paymentMethod: null, // NEW: Initialize payment method
+  paymentMethod: null,
   currentStep: 1,
 
   setService: (info) =>
@@ -159,7 +159,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       couponCode: null,
       discountAmount: 0,
       totalAmount: 0,
-      paymentMethod: null, // NEW: Reset payment method
+      paymentMethod: null,
       currentStep: 1,
     }),
 }))

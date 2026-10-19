@@ -1,10 +1,4 @@
-/**
- * WHAT: Provider jobs page with COD payment handling
- * WHY: 
- * - Show payment method (ONLINE/COD)
- * - For COD: Provider enters collected amount
- * - Different actions based on status
- */
+// apps/web/src/app/provider/jobs/page.tsx
 
 "use client"
 
@@ -24,10 +18,10 @@ export default function ProviderJobsPage() {
     const [status, setStatus] = useState("ALL")
     const [loading, setLoading] = useState(true)
 
-    // COD completion modal
-    const [codModal, setCodModal] = useState(false)
+    // CASH completion modal (Only for pure CASH, not POD/Online)
+    const [cashModal, setCashModal] = useState(false)
     const [selectedJob, setSelectedJob] = useState<any>(null)
-    const [codAmount, setCodAmount] = useState('')
+    const [cashAmount, setCashAmount] = useState('')
     const [completing, setCompleting] = useState(false)
 
     const fetchJobs = async () => {
@@ -47,11 +41,12 @@ export default function ProviderJobsPage() {
     useEffect(() => { fetchJobs() }, [status])
 
     const handleAction = async (id: string, action: string, job?: any) => {
-        // If completing COD job, show modal
-        if (action === 'complete' && job?.paymentMethod === 'COD') {
+        // ✅ FIX: Only show modal for pure CASH payments. 
+        // POD/ONLINE jobs will be completed directly (POD payment is handled via link in detail page)
+        if (action === 'complete' && job?.paymentMethod === 'CASH') {
             setSelectedJob(job)
-            setCodAmount(job.totalAmount.toString())
-            setCodModal(true)
+            setCashAmount(job.totalAmount.toString())
+            setCashModal(true)
             return
         }
 
@@ -72,8 +67,8 @@ export default function ProviderJobsPage() {
         }
     }
 
-    const handleCodComplete = async () => {
-        if (!selectedJob || !codAmount) return
+    const handleCashComplete = async () => {
+        if (!selectedJob || !cashAmount) return
 
         setCompleting(true)
         try {
@@ -81,20 +76,20 @@ export default function ProviderJobsPage() {
                 method: 'POST',
                 body: JSON.stringify({ 
                     action: 'complete',
-                    codAmountCollected: parseFloat(codAmount)
+                    codAmountCollected: parseFloat(cashAmount) // Reusing backend field for cash collection
                 })
             })
             const data = await res.json()
 
             if (data.success) {
                 toast.success(data.message)
-                setCodModal(false)
+                setCashModal(false)
                 setSelectedJob(null)
-                setCodAmount('')
+                setCashAmount('')
                 fetchJobs()
             } else toast.error(data.error)
         } catch (error) {
-            console.error("COD complete error:", error)
+            console.error("Cash complete error:", error)
             toast.error("Failed to complete job")
         } finally {
             setCompleting(false)
@@ -137,13 +132,13 @@ export default function ProviderJobsPage() {
                 </div>
             )}
 
-            {/* COD Completion Modal */}
-            <Dialog open={codModal} onOpenChange={setCodModal}>
+            {/* CASH Completion Modal (Only for pure CASH) */}
+            <Dialog open={cashModal} onOpenChange={setCashModal}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <IndianRupee className="h-5 w-5" />
-                            Confirm COD Collection
+                            Confirm Cash Collection
                         </DialogTitle>
                         <DialogDescription>
                             Enter the amount collected from customer for booking #{selectedJob?.bookingNumber}
@@ -158,22 +153,19 @@ export default function ProviderJobsPage() {
                             <Label>Amount Collected from Customer *</Label>
                             <Input
                                 type="number"
-                                value={codAmount}
-                                onChange={(e) => setCodAmount(e.target.value)}
+                                value={cashAmount}
+                                onChange={(e) => setCashAmount(e.target.value)}
                                 placeholder="Enter amount"
                             />
-                            <p className="text-xs text-muted-foreground">
-                                Enter the exact amount you collected from the customer
-                            </p>
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <Button variant="outline" onClick={() => setCodModal(false)} className="flex-1">
+                        <Button variant="outline" onClick={() => setCashModal(false)} className="flex-1">
                             Cancel
                         </Button>
                         <Button 
-                            onClick={handleCodComplete} 
-                            disabled={completing || !codAmount}
+                            onClick={handleCashComplete} 
+                            disabled={completing || !cashAmount}
                             className="flex-1"
                         >
                             {completing ? 'Completing...' : 'Confirm & Complete'}

@@ -1,7 +1,7 @@
 /**
- * WHAT: Cart Store with address support
- * WHY: Production flow mein address selection zaroori hai before checkout
- * NOTE: Added addressId field for address selection
+ * WHAT: Cart Store with address, coupon, and discount support
+ * WHY: Production flow mein address, coupon, discount zaroori hai
+ * NOTE: All cart data persisted in localStorage
  */
 
 'use client'
@@ -31,20 +31,25 @@ interface CartItem {
 
 interface CartState {
   items: CartItem[]
-  addressId: string | null // NEW: Selected address ID
-  
+  addressId: string | null
+  couponCode: string | null
+  discountAmount: number
+
   // Actions
   addItem: (item: Omit<CartItem, 'id'>) => void
   removeItem: (itemId: string) => void
   updateQuantity: (itemId: string, quantity: number) => void
   updateSchedule: (itemId: string, date: string, time: string) => void
-  setAddress: (addressId: string) => void // NEW: Set address
-  clearAddress: () => void // NEW: Clear address
+  setAddress: (addressId: string) => void
+  clearAddress: () => void
+  applyCoupon: (code: string, discount: number) => void
+  removeCoupon: () => void
   clearCart: () => void
-  
+
   // Calculations
   getTotalItems: () => number
   getTotalAmount: () => number
+  getFinalAmount: () => number
   getItemById: (itemId: string) => CartItem | undefined
 }
 
@@ -52,7 +57,9 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      addressId: null, // NEW: Initialize address
+      addressId: null,
+      couponCode: null,
+      discountAmount: 0,
 
       addItem: (item) => {
         const id = `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -93,7 +100,20 @@ export const useCartStore = create<CartState>()(
         set({ addressId: null })
       },
 
-      clearCart: () => set({ items: [], addressId: null }),
+      applyCoupon: (code, discount) => {
+        set({ couponCode: code, discountAmount: discount })
+      },
+
+      removeCoupon: () => {
+        set({ couponCode: null, discountAmount: 0 })
+      },
+
+      clearCart: () => set({
+        items: [],
+        addressId: null,
+        couponCode: null,
+        discountAmount: 0,
+      }),
 
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0)
@@ -105,6 +125,12 @@ export const useCartStore = create<CartState>()(
           const itemTotal = (item.selectedPrice + addOnsTotal) * item.quantity
           return total + itemTotal
         }, 0)
+      },
+
+      getFinalAmount: () => {
+        const total = get().getTotalAmount()
+        const discount = get().discountAmount
+        return Math.max(0, total - discount)
       },
 
       getItemById: (itemId) => {

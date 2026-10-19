@@ -16,6 +16,7 @@ import { StickyBookingBar } from '@/components/services/StickyBookingBar'
 import { AddToCartButton } from '@/components/services/AddToCartButton'
 import { SITE_CONFIG } from '@/lib/config'
 import { BookNowButton } from '@/components/services/BookNowButton'
+import { ServiceBookingWrapper } from '@/components/services/ServiceBookingWrapper'
 
 // ✅ ENHANCED — Premium service detail page
 // Changes:
@@ -103,7 +104,7 @@ export default async function ServiceDetailPage({ params }: Props) {
               />
               {/* Gradient overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-              
+
               {/* Badges on image */}
               <div className="absolute top-4 left-4 flex flex-wrap gap-2">
                 {service.isTrending && (
@@ -170,7 +171,6 @@ export default async function ServiceDetailPage({ params }: Props) {
           {/* Right Column — Sidebar */}
           <div className="hidden lg:block">
             <div className="sticky top-24 space-y-4">
-              {/* ✅ Enhanced Sidebar Card */}
               <div className="rounded-2xl border border-gray-200 bg-card shadow-sm p-6 space-y-5">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
@@ -178,26 +178,10 @@ export default async function ServiceDetailPage({ params }: Props) {
                   </span>
                   Select Package
                 </h3>
-                
-                <PricingSelector service={service} />
 
-                {service.addOns.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h4 className="font-medium mb-3">Add-ons</h4>
-                      <AddOnSelector addOns={service.addOns} />
-                    </div>
-                  </>
-                )}
+                {/* ✅ REPLACE: PricingSelector + AddToCartButton with Wrapper */}
+                <ServiceBookingWrapper service={service} />
 
-                <Separator />
-
-                <div className="space-y-3">
-                  <AddToCartButton service={service} />
-
-                  <BookNowButton service={service} />
-                </div>
               </div>
             </div>
           </div>
