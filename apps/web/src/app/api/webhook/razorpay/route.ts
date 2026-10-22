@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true })
             }
 
-            // Update Booking
+            // Update Booking Payment Status
             await db.booking.update({
                 where: { id: booking.id },
                 data: { 
@@ -111,26 +111,6 @@ export async function POST(request: NextRequest) {
                     }
                 })
                 console.log('✅ Payment record created')
-            }
-
-            // ✅ FIX: Update Provider Earning for POD/COD payments
-            if (booking.providerId && (booking.paymentMethod === 'POD' || booking.paymentMethod === 'COD')) {
-                try {
-                    await db.providerEarning.updateMany({
-                        where: { 
-                            bookingId: booking.id,
-                            providerId: booking.providerId
-                        },
-                        data: {
-                            status: 'SETTLED',
-                            paymentMethod: booking.paymentMethod,
-                            settledAt: new Date()
-                        }
-                    })
-                    console.log('✅ Provider Earning updated to SETTLED')
-                } catch (e) {
-                    console.error('Provider earning update error:', e)
-                }
             }
 
             // Status History

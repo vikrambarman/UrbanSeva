@@ -1,8 +1,6 @@
-// components/admin/ServiceForm.tsx
-
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Plus, Trash2, Save } from "lucide-react"
+import { Plus, Trash2, Save, Tag, Percent, AlertCircle, IndianRupee, ArrowDownRight, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api-client"
 
@@ -38,10 +36,84 @@ export function ServiceForm({ initialData, categories }: ServiceFormProps) {
     const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured || false)
     const [isActive, setIsActive] = useState(initialData ? initialData.isActive : true)
 
+    // GST Override State
+    const [useCategoryGST, setUseCategoryGST] = useState(
+        initialData?.gstEnabled === null && initialData?.gstPercentage === null
+    )
+    const [gstEnabled, setGstEnabled] = useState(initialData?.gstEnabled ?? false)
+    const [gstPercentage, setGstPercentage] = useState(initialData?.gstPercentage ?? 18)
+
+    // Commission Override State
+    const [useCategoryCommission, setUseCategoryCommission] = useState(
+        initialData?.commissionType === null && initialData?.commissionValue === null
+    )
+    const [commissionType, setCommissionType] = useState(initialData?.commissionType || "PERCENTAGE")
+    const [commissionValue, setCommissionValue] = useState(initialData?.commissionValue || 20)
+
     // Arrays State
     const [inclusions, setInclusions] = useState<string[]>(initialData?.inclusions?.map((i: any) => i.text) || [""])
     const [exclusions, setExclusions] = useState<string[]>(initialData?.exclusions?.map((i: any) => i.text) || [""])
     const [faqs, setFaqs] = useState(initialData?.faqs?.map((f: any) => ({ question: f.question, answer: f.answer })) || [{ question: "", answer: "" }])
+
+    // Get selected category info
+    const selectedCategory = categories.find(cat => 
+        cat.subCategories.some((sub: any) => sub.id === subCategoryId)
+    )
+
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Live Price Breakdown Calculation (real-time)
+    // ═══════════════════════════════════════════════════════════════
+    const priceBreakdown = useMemo(() => {
+        const total = Number(basePrice) || 0
+        if (total === 0 || !selectedCategory) return null
+
+        // Determine effective GST settings
+        const effGstEnabled = useCategoryGST 
+            ? (selectedCategory?.gstEnabled ?? false)
+            : gstEnabled
+        const effGstRate = effGstEnabled 
+            ? (useCategoryGST ? (selectedCategory?.gstPercentage ?? 0) : Number(gstPercentage))
+            : 0
+
+        // Determine effective Commission settings
+        const effCommType = useCategoryCommission
+            ? (selectedCategory?.commissionType ?? 'PERCENTAGE')
+            : commissionType
+        const effCommValue = useCategoryCommission
+            ? (selectedCategory?.commissionValue ?? 0)
+            : Number(commissionValue)
+
+        // GST Inclusive Model Calculations
+        const baseAmt = effGstRate > 0 ? total / (1 + effGstRate / 100) : total
+        const gstAmt = total - baseAmt
+        const cgst = gstAmt / 2
+        const sgst = gstAmt / 2
+
+        // Commission Calculation
+        let commAmt = 0
+        if (effCommType === 'FIXED') {
+            commAmt = Number(effCommValue) || 0
+        } else {
+            commAmt = baseAmt * ((Number(effCommValue) || 0) / 100)
+        }
+        const providerEarn = baseAmt - commAmt
+
+        return {
+            total,
+            baseAmt: Math.round(baseAmt * 100) / 100,
+            gstEnabled: effGstEnabled,
+            gstRate: effGstRate,
+            gstAmt: Math.round(gstAmt * 100) / 100,
+            cgst: Math.round(cgst * 100) / 100,
+            sgst: Math.round(sgst * 100) / 100,
+            commType: effCommType,
+            commValue: effCommValue,
+            commAmt: Math.round(commAmt * 100) / 100,
+            providerEarn: Math.round(providerEarn * 100) / 100,
+            isGstCustom: !useCategoryGST,
+            isCommCustom: !useCategoryCommission,
+        }
+    }, [basePrice, useCategoryGST, gstEnabled, gstPercentage, useCategoryCommission, commissionType, commissionValue, selectedCategory])
 
     const handleArrayChange = (setter: any, index: number, value: any, key?: string) => {
         setter((prev: any) => {
@@ -75,6 +147,10 @@ export function ServiceForm({ initialData, categories }: ServiceFormProps) {
             inclusions: inclusions.filter(i => i.trim() !== ""),
             exclusions: exclusions.filter(i => i.trim() !== ""),
             faqs: faqs.filter((f: { question: string; answer: string }) => f.question.trim() !== ""),
+            gstEnabled: useCategoryGST ? null : gstEnabled,
+            gstPercentage: useCategoryGST ? null : gstPercentage,
+            commissionType: useCategoryCommission ? null : commissionType,
+            commissionValue: useCategoryCommission ? null : Number(commissionValue),
         }
 
         try {
@@ -97,11 +173,8 @@ export function ServiceForm({ initialData, categories }: ServiceFormProps) {
 
             if (data.success) {
                 toast.success(initialData ? "Service updated!" : "Service created!")
-
-                // ✅ FIX: Add timestamp to bust cache
                 const timestamp = Date.now()
                 window.location.href = `/admin/services?_t=${timestamp}`
-
             } else {
                 toast.error(data.error || "Something went wrong")
                 setLoading(false)
@@ -114,11 +187,16 @@ export function ServiceForm({ initialData, categories }: ServiceFormProps) {
     }
 
     const subCategoryOptions = categories.flatMap(cat =>
-        cat.subCategories.map((sub: any) => ({ value: sub.id, label: `${cat.name} > ${sub.name}` }))
+        cat.subCategories.map((sub: any) => ({ 
+            value: sub.id, 
+            label: `${cat.name} > ${sub.name}`,
+            category: cat
+        }))
     )
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Basic Details Card */}
             <Card>
                 <CardHeader><CardTitle>Basic Details</CardTitle></CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-2">
@@ -152,11 +230,12 @@ export function ServiceForm({ initialData, categories }: ServiceFormProps) {
                 </CardContent>
             </Card>
 
+            {/* Pricing Card */}
             <Card>
                 <CardHeader><CardTitle>Pricing & Configuration</CardTitle></CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-4">
                     <div className="space-y-2">
-                        <Label>Base Price (₹)</Label>
+                        <Label>Base Price (₹) <span className="text-xs text-muted-foreground">— Customer pays this</span></Label>
                         <Input type="number" value={basePrice} onChange={(e) => setBasePrice(Number(e.target.value))} />
                     </div>
                     <div className="space-y-2">
@@ -191,6 +270,281 @@ export function ServiceForm({ initialData, categories }: ServiceFormProps) {
                         <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
                         <Label htmlFor="active" className="cursor-pointer">Active</Label>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* NEW: Live Price Breakdown Card — Real-time financial summary */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {priceBreakdown && selectedCategory && (
+                <Card className="border-2 border-primary/20 bg-gradient-to-br from-orange-50/50 to-blue-50/50">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                            <IndianRupee className="w-5 h-5 text-primary" />
+                            Live Price Breakdown
+                            <span className="text-xs font-normal text-muted-foreground ml-2">
+                                (Updates in real-time as you change settings)
+                            </span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Customer Pays */}
+                        <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg">
+                            <span className="text-base font-semibold">Customer Pays (Total):</span>
+                            <span className="text-xl font-bold text-primary">
+                                ₹{priceBreakdown.total.toLocaleString('en-IN')}
+                            </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-center">
+                            <ArrowDownRight className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground mx-1">GST Inclusive Breakdown</span>
+                            <ArrowDownRight className="h-4 w-4 text-muted-foreground rotate-180" />
+                        </div>
+
+                        {/* Base Amount */}
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Base Amount (pre-GST):</span>
+                            <span className="font-semibold">₹{priceBreakdown.baseAmt.toLocaleString('en-IN')}</span>
+                        </div>
+
+                        {/* GST Breakdown */}
+                        {priceBreakdown.gstEnabled && priceBreakdown.gstRate > 0 ? (
+                            <div className="space-y-1 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-green-800">
+                                        GST ({priceBreakdown.gstRate}%):
+                                    </span>
+                                    <span className="font-semibold text-green-700">
+                                        ₹{priceBreakdown.gstAmt.toLocaleString('en-IN')}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center pl-4">
+                                    <span className="text-xs text-green-700">
+                                        ├─ CGST ({priceBreakdown.gstRate / 2}%):
+                                    </span>
+                                    <span className="text-xs text-green-700">
+                                        ₹{priceBreakdown.cgst.toLocaleString('en-IN')}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center pl-4">
+                                    <span className="text-xs text-green-700">
+                                        └─ SGST ({priceBreakdown.gstRate / 2}%):
+                                    </span>
+                                    <span className="text-xs text-green-700">
+                                        ₹{priceBreakdown.sgst.toLocaleString('en-IN')}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex justify-between items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                <span className="text-sm text-muted-foreground">GST:</span>
+                                <span className="text-sm text-muted-foreground font-medium">No GST Applied</span>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-center">
+                            <ArrowDownRight className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground mx-1">Commission Deduction</span>
+                            <ArrowDownRight className="h-4 w-4 text-muted-foreground rotate-180" />
+                        </div>
+
+                        {/* Commission */}
+                        <div className="flex justify-between items-center p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                            <span className="text-sm font-medium text-orange-800">
+                                Company Commission{' '}
+                                <span className="text-xs font-normal">
+                                    ({priceBreakdown.commType === 'PERCENTAGE' 
+                                        ? `${priceBreakdown.commValue}% of base` 
+                                        : `₹${priceBreakdown.commValue} fixed`
+                                    })
+                                </span>
+                            </span>
+                            <span className="font-semibold text-orange-700">
+                                -₹{priceBreakdown.commAmt.toLocaleString('en-IN')}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center justify-center">
+                            <ArrowUpRight className="h-4 w-4 text-green-600" />
+                            <span className="text-xs text-green-600 font-medium mx-1">Provider Gets</span>
+                            <ArrowUpRight className="h-4 w-4 text-green-600 rotate-180" />
+                        </div>
+
+                        {/* Provider Earning */}
+                        <div className="flex justify-between items-center p-3 bg-green-50 border-2 border-green-300 rounded-lg">
+                            <span className="text-base font-bold text-green-800">Provider Earning:</span>
+                            <span className="text-xl font-bold text-green-600">
+                                ₹{priceBreakdown.providerEarn.toLocaleString('en-IN')}
+                            </span>
+                        </div>
+                        
+                        {/* Settings Source Info */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-xs text-blue-800">
+                                <span className="font-semibold">⚙️ Settings Source:</span>
+                            </p>
+                            <div className="flex gap-4 mt-1">
+                                <span className="text-xs text-blue-700">
+                                    GST: {priceBreakdown.isGstCustom 
+                                        ? '⚡ Custom Override' 
+                                        : `📋 Category Default (${selectedCategory.name})`
+                                    }
+                                </span>
+                                <span className="text-xs text-blue-700">
+                                    Commission: {priceBreakdown.isCommCustom 
+                                        ? '⚡ Custom Override' 
+                                        : `📋 Category Default (${selectedCategory.name})`
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Show message if no category selected */}
+            {!selectedCategory && subCategoryId && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <p className="text-sm text-yellow-800">
+                        Select a valid category/sub-category to see the price breakdown.
+                    </p>
+                </div>
+            )}
+
+            {/* GST Settings Card */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-primary" />
+                            GST Settings
+                        </CardTitle>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {selectedCategory && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-900">
+                                <span className="font-semibold">Category Default:</span>{' '}
+                                GST {selectedCategory.gstEnabled ? `${selectedCategory.gstPercentage}%` : 'Disabled'}
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                            <Label className="font-medium">Use Category Default</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Inherit GST settings from selected category
+                            </p>
+                        </div>
+                        <Switch
+                            checked={useCategoryGST}
+                            onCheckedChange={setUseCategoryGST}
+                        />
+                    </div>
+
+                    {!useCategoryGST && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-primary/5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label>Enable GST for this service</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Apply GST to this specific service
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={gstEnabled}
+                                    onCheckedChange={setGstEnabled}
+                                />
+                            </div>
+
+                            {gstEnabled && (
+                                <div className="space-y-2">
+                                    <Label>GST Rate (%)</Label>
+                                    <select
+                                        value={gstPercentage}
+                                        onChange={(e) => setGstPercentage(Number(e.target.value))}
+                                        className="w-full md:w-48 px-3 py-2 border rounded-lg text-sm font-medium bg-background"
+                                    >
+                                        <option value={5}>5%</option>
+                                        <option value={12}>12%</option>
+                                        <option value={18}>18%</option>
+                                        <option value={28}>28%</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Commission Settings Card */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Percent className="w-5 h-5 text-primary" />
+                            Commission Settings
+                        </CardTitle>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {selectedCategory && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-900">
+                                <span className="font-semibold">Category Default:</span>{' '}
+                                {selectedCategory.commissionType === 'PERCENTAGE' 
+                                    ? `${selectedCategory.commissionValue}%`
+                                    : `₹${selectedCategory.commissionValue} fixed`
+                                }
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                            <Label className="font-medium">Use Category Default</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Inherit commission settings from selected category
+                            </p>
+                        </div>
+                        <Switch
+                            checked={useCategoryCommission}
+                            onCheckedChange={setUseCategoryCommission}
+                        />
+                    </div>
+
+                    {!useCategoryCommission && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-primary/5">
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Commission Type</Label>
+                                    <Select value={commissionType} onValueChange={setCommissionType}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="PERCENTAGE">Percentage (%)</SelectItem>
+                                            <SelectItem value="FIXED">Fixed Amount (₹)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>
+                                        {commissionType === 'PERCENTAGE' ? 'Commission Rate (%)' : 'Fixed Commission (₹)'}
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        value={commissionValue}
+                                        onChange={(e) => setCommissionValue(Number(e.target.value))}
+                                        min="0"
+                                        step="0.5"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

@@ -31,7 +31,6 @@ export async function GET(
     }
 }
 
-
 export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -87,6 +86,15 @@ export async function PUT(
                         isTrending: body.isTrending,
                         isFeatured: body.isFeatured,
                         isActive: body.isActive,
+                        
+                        // ═══════════════════════════════
+                        // NEW: Service-level overrides for GST & Commission
+                        // ═══════════════════════════════
+                        gstEnabled: body.gstEnabled === undefined ? null : body.gstEnabled,
+                        gstPercentage: (body.gstPercentage !== undefined && body.gstPercentage !== null && body.gstPercentage !== '') ? parseFloat(body.gstPercentage) : null,
+                        commissionType: body.commissionType === undefined ? null : body.commissionType,
+                        commissionValue: (body.commissionValue !== undefined && body.commissionValue !== null && body.commissionValue !== '') ? parseFloat(body.commissionValue) : null,
+
                         inclusions: { create: (body.inclusions || []).map((text: string, i: number) => ({ text, sortOrder: i })) },
                         exclusions: { create: (body.exclusions || []).map((text: string, i: number) => ({ text, sortOrder: i })) },
                         pricingTiers: { create: (body.pricingTiers || []).map((tier: any, i: number) => ({ label: tier.label, price: tier.price, duration: tier.duration, sortOrder: i })) },

@@ -11,11 +11,16 @@ async function getServices(searchParams: {
     page?: string
     search?: string
     status?: string
+    categoryId?: string
 }) {
     const page = parseInt(searchParams.page || '1')
     const limit = 10
     const search = searchParams.search || ''
     const isActive = searchParams.status
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Category filter
+    // ═══════════════════════════════════════════════════════════════
+    const categoryId = searchParams.categoryId || ''
 
     const where: any = {}
     
@@ -28,6 +33,12 @@ async function getServices(searchParams: {
     if (isActive !== undefined && isActive !== '' && isActive !== 'ALL') {
         where.isActive = isActive === 'true'
     }
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Filter by category
+    // ═══════════════════════════════════════════════════════════════
+    if (categoryId && categoryId !== 'ALL') {
+        where.subCategory = { categoryId }
+    }
 
     const [services, total] = await Promise.all([
         db.service.findMany({
@@ -39,7 +50,16 @@ async function getServices(searchParams: {
                 subCategory: { 
                     select: { 
                         name: true, 
-                        category: { select: { name: true } } 
+                        category: { 
+                            select: { 
+                                name: true,
+                                // ═══════════════════════════════════════════════════════════════
+                                // NEW: Include GST & Commission info for table display
+                                // ═══════════════════════════════════════════════════════════════
+                                gstEnabled: true,
+                                gstPercentage: true,
+                            } 
+                        } 
                     } 
                 },
                 _count: { 
@@ -61,14 +81,31 @@ async function getServices(searchParams: {
     }
 }
 
-// ✅ FIX: Async searchParams
+// ═══════════════════════════════════════════════════════════════
+// NEW: Fetch categories for filter dropdown
+// ═══════════════════════════════════════════════════════════════
+async function getCategories() {
+    return db.category.findMany({
+        where: { isActive: true },
+        select: {
+            id: true,
+            name: true,
+            _count: { select: { subCategories: true } }
+        },
+        orderBy: { name: 'asc' }
+    })
+}
+
 export default async function AdminServicesPage({
     searchParams
 }: {
-    searchParams: Promise<{ page?: string; search?: string; status?: string }>
+    searchParams: Promise<{ page?: string; search?: string; status?: string; categoryId?: string }>
 }) {
     const params = await searchParams
-    const data = await getServices(params)
+    const [data, categories] = await Promise.all([
+        getServices(params),
+        getCategories()
+    ])
 
     return (
         <div className="p-6 space-y-6">
@@ -87,7 +124,7 @@ export default async function AdminServicesPage({
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
             }>
-                <ServicesList initialData={data} />
+                <ServicesList initialData={data} categories={categories} />
             </Suspense>
         </div>
     )

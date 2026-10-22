@@ -1,5 +1,3 @@
-// components/admin/ServiceTable.tsx
-
 "use client"
 
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +18,19 @@ interface Service {
     isActive: boolean
     isTrending: boolean
     isFeatured: boolean
-    subCategory: { name: string, category: { name: string } }
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Service-level override fields
+    // ═══════════════════════════════════════════════════════════════
+    gstEnabled: boolean | null
+    gstPercentage: number | null
+    subCategory: { 
+        name: string
+        category: { 
+            name: string
+            gstEnabled: boolean
+            gstPercentage: number
+        } 
+    }
     _count: { bookings: number, reviews: number }
 }
 
@@ -28,22 +38,52 @@ interface ServiceTableProps {
     services: Service[]
     search: string
     status: string
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Category filter props
+    // ═══════════════════════════════════════════════════════════════
+    categoryId: string
+    categories: { id: string; name: string; _count: { subCategories: number } }[]
     pagination: { page: number; limit: number; total: number; totalPages: number }
     onSearchChange: (val: string) => void
     onStatusChange: (val: string) => void
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Category change callback
+    // ═══════════════════════════════════════════════════════════════
+    onCategoryChange: (val: string) => void
     onReset: () => void
     onToggleActive: (id: string, currentStatus: boolean) => void
     onDelete: (id: string) => void
     onPageChange: (page: number) => void
-    // CHANGE: isLoading prop added — ServicesList se useTransition ka pending state aayega
-    // Jab URL change hoga aur server component re-render hoga, tab tak loading dikhega
     isLoading?: boolean
 }
 
 export function ServiceTable({ 
-    services, search, status, pagination, onSearchChange, onStatusChange, 
+    services, search, status, categoryId, categories, pagination, 
+    onSearchChange, onStatusChange, onCategoryChange,
     onReset, onToggleActive, onDelete, onPageChange, isLoading = false
 }: ServiceTableProps) {
+
+    // ═══════════════════════════════════════════════════════════════
+    // NEW: Helper to get effective GST info for a service
+    // ═══════════════════════════════════════════════════════════════
+    const getEffectiveGST = (service: Service) => {
+        if (service.gstEnabled === null) {
+            // Using category default
+            const cat = service.subCategory?.category
+            return {
+                enabled: cat?.gstEnabled ?? false,
+                rate: cat?.gstPercentage ?? 0,
+                source: 'category' as const
+            }
+        }
+        // Custom override
+        return {
+            enabled: service.gstEnabled,
+            rate: service.gstPercentage ?? 0,
+            source: 'custom' as const
+        }
+    }
+
     return (
         <TooltipProvider>
             <div className="space-y-4">
@@ -58,8 +98,24 @@ export function ServiceTable({
                             className="pl-9" 
                         />
                     </div>
+                    {/* ═══════════════════════════════════════════════════════════════ */}
+                    {/* NEW: Category Filter Dropdown */}
+                    {/* ═══════════════════════════════════════════════════════════════ */}
+                    <Select value={categoryId} onValueChange={onCategoryChange}>
+                        <SelectTrigger className="w-full sm:w-[200px]">
+                            <SelectValue placeholder="All Categories" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Categories</SelectItem>
+                            {categories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                    {cat.name} ({cat._count.subCategories})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Select value={status} onValueChange={onStatusChange}>
-                        <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[150px]">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -76,9 +132,7 @@ export function ServiceTable({
                     </Button>
                 </div>
 
-                {/* CHANGE: Table wrapper mein relative positioning + loading overlay */}
                 <div className="relative">
-                    {/* CHANGE: Loading overlay — jab server navigation ho rahi ho */}
                     {isLoading && (
                         <div className="absolute inset-0 bg-background/60 z-10 flex items-center justify-center rounded-md">
                             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -92,6 +146,10 @@ export function ServiceTable({
                                     <TableHead>Service</TableHead>
                                     <TableHead>Category</TableHead>
                                     <TableHead>Base Price</TableHead>
+                                    {/* ═══════════════════════════════════════════════════════════════ */}
+                                    {/* NEW: GST Status Column */}
+                                    {/* ═══════════════════════════════════════════════════════════════ */}
+                                    <TableHead>GST</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Tags</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -100,113 +158,148 @@ export function ServiceTable({
                             <TableBody>
                                 {services.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                             No services found.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    services.map((service) => (
-                                        <TableRow key={service.id}>
-                                            <TableCell>
-                                                <div className="flex items-center gap-3">
-                                                    {service.image ? (
-                                                        <img 
-                                                            src={service.image} 
-                                                            alt={service.name} 
-                                                            className="w-10 h-10 rounded-md object-cover" 
-                                                        />
-                                                    ) : (
-                                                        <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center text-xs">
-                                                            No Img
+                                    services.map((service) => {
+                                        const gstInfo = getEffectiveGST(service)
+                                        return (
+                                            <TableRow key={service.id}>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-3">
+                                                        {service.image ? (
+                                                            <img 
+                                                                src={service.image} 
+                                                                alt={service.name} 
+                                                                className="w-10 h-10 rounded-md object-cover" 
+                                                            />
+                                                        ) : (
+                                                            <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center text-xs">
+                                                                No Img
+                                                            </div>
+                                                        )}
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium">{service.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{service.slug}</span>
                                                         </div>
-                                                    )}
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">{service.name}</span>
-                                                        <span className="text-xs text-muted-foreground">{service.slug}</span>
                                                     </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm">{service.subCategory?.name}</span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {service.subCategory?.category?.name}
-                                                    </span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>₹{service.basePrice}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={service.isActive ? 'default' : 'secondary'}>
-                                                    {service.isActive ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex gap-1">
-                                                    {service.isTrending && (
-                                                        <Badge variant="outline" className="text-orange-500 border-orange-500">
-                                                            Trending
-                                                        </Badge>
-                                                    )}
-                                                    {service.isFeatured && (
-                                                        <Badge variant="outline" className="text-purple-500 border-purple-500">
-                                                            Featured
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button asChild variant="ghost" size="icon" className="hover:bg-blue-50 hover:text-blue-600">
-                                                                <Link href={`/admin/services/${service.id}/edit`}>
-                                                                    <Edit className="h-4 w-4" />
-                                                                </Link>
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>Edit Service</p></TooltipContent>
-                                                    </Tooltip>
-
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                onClick={() => onToggleActive(service.id, service.isActive)}
-                                                                className={service.isActive 
-                                                                    ? "hover:bg-green-50 hover:text-green-600" 
-                                                                    : "hover:bg-orange-50 hover:text-orange-600"
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm">{service.subCategory?.name}</span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {service.subCategory?.category?.name}
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>₹{service.basePrice}</TableCell>
+                                                {/* ═══════════════════════════════════════════════════════════════ */}
+                                                {/* NEW: GST Status Badge */}
+                                                {/* ═══════════════════════════════════════════════════════════════ */}
+                                                <TableCell>
+                                                    {gstInfo.enabled ? (
+                                                        <div className="flex flex-col">
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className={gstInfo.source === 'custom' 
+                                                                    ? 'text-orange-600 border-orange-300 bg-orange-50' 
+                                                                    : 'text-blue-600 border-blue-300 bg-blue-50'
                                                                 }
                                                             >
-                                                                {service.isActive ? (
-                                                                    <Eye className="h-4 w-4 text-green-600" />
-                                                                ) : (
-                                                                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                                                )}
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p>{service.isActive ? 'Deactivate Service' : 'Activate Service'}</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
+                                                                {gstInfo.source === 'custom' ? '⚡' : '📋'} {gstInfo.rate}%
+                                                            </Badge>
+                                                            <span className="text-[10px] text-muted-foreground mt-0.5">
+                                                                {gstInfo.source === 'custom' ? 'Custom' : 'Category'}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col">
+                                                            <Badge variant="secondary" className="text-muted-foreground">
+                                                                No GST
+                                                            </Badge>
+                                                            {gstInfo.source === 'custom' && (
+                                                                <span className="text-[10px] text-orange-500 mt-0.5">
+                                                                    ⚡ Custom
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={service.isActive ? 'default' : 'secondary'}>
+                                                        {service.isActive ? 'Active' : 'Inactive'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex gap-1">
+                                                        {service.isTrending && (
+                                                            <Badge variant="outline" className="text-orange-500 border-orange-500">
+                                                                Trending
+                                                            </Badge>
+                                                        )}
+                                                        {service.isFeatured && (
+                                                            <Badge variant="outline" className="text-purple-500 border-purple-500">
+                                                                Featured
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button asChild variant="ghost" size="icon" className="hover:bg-blue-50 hover:text-blue-600">
+                                                                    <Link href={`/admin/services/${service.id}/edit`}>
+                                                                        <Edit className="h-4 w-4" />
+                                                                    </Link>
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>Edit Service</p></TooltipContent>
+                                                        </Tooltip>
 
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                onClick={() => onDelete(service.id)}
-                                                                className="hover:bg-red-50 hover:text-red-600"
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>Delete Service</p></TooltipContent>
-                                                    </Tooltip>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    onClick={() => onToggleActive(service.id, service.isActive)}
+                                                                    className={service.isActive 
+                                                                        ? "hover:bg-green-50 hover:text-green-600" 
+                                                                        : "hover:bg-orange-50 hover:text-orange-600"
+                                                                    }
+                                                                >
+                                                                    {service.isActive ? (
+                                                                        <Eye className="h-4 w-4 text-green-600" />
+                                                                    ) : (
+                                                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                                                    )}
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                <p>{service.isActive ? 'Deactivate Service' : 'Activate Service'}</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    onClick={() => onDelete(service.id)}
+                                                                    className="hover:bg-red-50 hover:text-red-600"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>Delete Service</p></TooltipContent>
+                                                        </Tooltip>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })
                                 )}
                             </TableBody>
                         </Table>

@@ -1,8 +1,7 @@
-// apps/web/src/app/admin/categories/page.tsx
 /**
  * WHAT: Admin Category Management Page
- * WHY: Admin ko categories manage karne ke liye - especially GST settings
- * NOTE: GST enable/disable toggle + percentage dropdown
+ * WHY: Admin ko categories manage karne ke liye - GST + Commission settings
+ * NOTE: GST enable/disable toggle + percentage dropdown + Commission type/value
  */
 
 'use client'
@@ -16,10 +15,10 @@ import { Switch } from '@/components/ui/switch'
 import { 
   Loader2, 
   Settings, 
-  ChevronRight, 
   Tag,
   FolderOpen,
   AlertCircle,
+  Percent,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/authStore'
@@ -33,6 +32,8 @@ interface Category {
   isActive: boolean
   gstEnabled: boolean
   gstPercentage: number
+  commissionType: string
+  commissionValue: number
   subCategories: {
     id: string
     name: string
@@ -60,6 +61,7 @@ export default function CategoriesPage() {
     try {
       const response = await fetch('/api/admin/categories', {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       })
 
       const data = await response.json()
@@ -145,6 +147,77 @@ export default function CategoriesPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Commission inline update handlers
+  // ═══════════════════════════════════════════════════════════════
+  const handleUpdateCommissionType = async (categoryId: string, type: string) => {
+    if (!token) return
+    setUpdatingId(categoryId)
+
+    try {
+      const response = await fetch(`/api/admin/categories/${categoryId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ commissionType: type }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setCategories(prev =>
+          prev.map(cat =>
+            cat.id === categoryId ? { ...cat, commissionType: type } : cat
+          )
+        )
+        toast.success(`Commission type updated to ${type}`)
+      } else {
+        toast.error(data.error || 'Failed to update commission type')
+      }
+    } catch (error) {
+      console.error('Update commission type error:', error)
+      toast.error('Failed to update commission type')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  const handleUpdateCommissionValue = async (categoryId: string, value: number) => {
+    if (!token) return
+    setUpdatingId(categoryId)
+
+    try {
+      const response = await fetch(`/api/admin/categories/${categoryId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ commissionValue: value }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setCategories(prev =>
+          prev.map(cat =>
+            cat.id === categoryId ? { ...cat, commissionValue: value } : cat
+          )
+        )
+        toast.success(`Commission value updated to ${value}`)
+      } else {
+        toast.error(data.error || 'Failed to update commission value')
+      }
+    } catch (error) {
+      console.error('Update commission value error:', error)
+      toast.error('Failed to update commission value')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -164,7 +237,7 @@ export default function CategoriesPage() {
           <div>
             <h1 className="text-2xl font-bold">Category Management</h1>
             <p className="text-sm text-muted-foreground">
-              Manage categories and GST settings
+              Manage categories, GST & Commission settings
             </p>
           </div>
         </div>
@@ -175,11 +248,13 @@ export default function CategoriesPage() {
         <CardContent className="flex items-start gap-3 p-4">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800">
-            <p className="font-semibold mb-1">GST Configuration</p>
+            <p className="font-semibold mb-1">GST & Commission Configuration</p>
+            <p className="mb-1">
+              <strong>GST:</strong> Customer sees inclusive pricing (no extra tax at checkout). Rates: 5%, 12%, 18%, 28%
+            </p>
             <p>
-              Enable GST for categories where tax is applicable. 
-              Customer will see inclusive pricing (no extra GST added at checkout).
-              GST rates: 0%, 5%, 12%, 18%, 28%
+              <strong>Commission:</strong> Company's cut from provider's earning. Can be % of base amount or fixed ₹ amount.
+              Services can override these defaults individually.
             </p>
           </div>
         </CardContent>
@@ -190,71 +265,37 @@ export default function CategoriesPage() {
         {categories.map((category) => (
           <Card key={category.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                {/* Category Info */}
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    {category.image ? (
-                      <img 
-                        src={category.image} 
-                        alt={category.name}
-                        className="w-full h-full rounded-xl object-cover"
-                      />
-                    ) : (
-                      <FolderOpen className="w-7 h-7 text-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{category.name}</h3>
-                    <div className="flex items-center gap-3 mt-1">
-                      <Badge variant={category.isActive ? 'default' : 'secondary'}>
-                        {category.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {category.subCategories?.length || 0} subcategories
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {category.subCategories?.reduce((acc, sc) => acc + (sc.services?.length || 0), 0) || 0} services
-                      </span>
+              <div className="flex flex-col gap-6">
+                {/* Top Row: Category Info */}
+                <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+                  {/* Category Info */}
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      {category.image ? (
+                        <img 
+                          src={category.image} 
+                          alt={category.name}
+                          className="w-full h-full rounded-xl object-cover"
+                        />
+                      ) : (
+                        <FolderOpen className="w-7 h-7 text-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg">{category.name}</h3>
+                      <div className="flex items-center gap-3 mt-1">
+                        <Badge variant={category.isActive ? 'default' : 'secondary'}>
+                          {category.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {category.subCategories?.length || 0} subcategories
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {category.subCategories?.reduce((acc, sc) => acc + (sc.services?.length || 0), 0) || 0} services
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* GST Controls */}
-                <div className="flex items-center gap-6 lg:gap-8">
-                  {/* GST Toggle */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Tag className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">GST</span>
-                    </div>
-                    <Switch
-                      checked={category.gstEnabled}
-                      onCheckedChange={(checked) => handleToggleGST(category.id, checked)}
-                      disabled={updatingId === category.id}
-                    />
-                    <Badge variant={category.gstEnabled ? 'default' : 'outline'}>
-                      {category.gstEnabled ? 'ON' : 'OFF'}
-                    </Badge>
-                  </div>
-
-                  {/* GST Percentage */}
-                  {category.gstEnabled && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Rate:</span>
-                      <select
-                        value={category.gstPercentage}
-                        onChange={(e) => handleUpdatePercentage(category.id, Number(e.target.value))}
-                        disabled={updatingId === category.id}
-                        className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-background"
-                      >
-                        <option value={5}>5%</option>
-                        <option value={12}>12%</option>
-                        <option value={18}>18%</option>
-                        <option value={28}>28%</option>
-                      </select>
-                    </div>
-                  )}
 
                   {/* Edit Button */}
                   <Button
@@ -263,8 +304,103 @@ export default function CategoriesPage() {
                     onClick={() => router.push(`/admin/categories/${category.id}/edit`)}
                   >
                     <Settings className="w-4 h-4 mr-1" />
-                    Edit
+                    Edit All
                   </Button>
+                </div>
+
+                {/* Bottom Row: GST + Commission Controls */}
+                <div className="flex flex-col md:flex-row gap-6 pt-4 border-t">
+                  {/* GST Controls */}
+                  <div className="flex-1 p-4 border rounded-lg bg-blue-50/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Tag className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-800">GST Settings</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={category.gstEnabled}
+                          onCheckedChange={(checked) => handleToggleGST(category.id, checked)}
+                          disabled={updatingId === category.id}
+                        />
+                        <Badge variant={category.gstEnabled ? 'default' : 'outline'}>
+                          {category.gstEnabled ? 'ON' : 'OFF'}
+                        </Badge>
+                      </div>
+
+                      {category.gstEnabled && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Rate:</span>
+                          <select
+                            value={category.gstPercentage}
+                            onChange={(e) => handleUpdatePercentage(category.id, Number(e.target.value))}
+                            disabled={updatingId === category.id}
+                            className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-background"
+                          >
+                            <option value={5}>5%</option>
+                            <option value={12}>12%</option>
+                            <option value={18}>18%</option>
+                            <option value={28}>28%</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Commission Controls */}
+                  <div className="flex-1 p-4 border rounded-lg bg-orange-50/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Percent className="w-4 h-4 text-orange-600" />
+                      <span className="text-sm font-semibold text-orange-800">Commission (Company Cut)</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Type:</span>
+                        <select
+                          value={category.commissionType || 'PERCENTAGE'}
+                          onChange={(e) => handleUpdateCommissionType(category.id, e.target.value)}
+                          disabled={updatingId === category.id}
+                          className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-background"
+                        >
+                          <option value="PERCENTAGE">Percentage (%)</option>
+                          <option value="FIXED">Fixed (₹)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Value:</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            value={category.commissionValue ?? 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value)
+                              if (val >= 0) {
+                                setCategories(prev =>
+                                  prev.map(cat =>
+                                    cat.id === category.id ? { ...cat, commissionValue: val } : cat
+                                  )
+                                )
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const val = Number(e.target.value)
+                              if (val >= 0 && val !== (category.commissionValue ?? 0)) {
+                                handleUpdateCommissionValue(category.id, val)
+                              }
+                            }}
+                            disabled={updatingId === category.id}
+                            min="0"
+                            step={category.commissionType === 'FIXED' ? '1' : '0.5'}
+                            className="w-20 px-2 py-1.5 border rounded-lg text-sm font-medium bg-background text-center"
+                          />
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {category.commissionType === 'FIXED' ? '₹' : '%'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>

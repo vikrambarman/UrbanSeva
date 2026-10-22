@@ -1,8 +1,3 @@
-// ═══════════════════════════════
-// CHANGE: Add service ID validation before creating ProviderService
-// WHY: Foreign key constraint error aa raha tha - serviceIds validate nahi ho rahe the
-// ═══════════════════════════════
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAdminUser } from '@/lib/auth'
@@ -19,10 +14,11 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
+        // CHANGE: commissionRate hata diya body se
         const { 
             name, phone, email, password, experience, 
-            bio, commissionRate, aadharNumber, panNumber,
-            serviceIds // NEW: Array of service IDs
+            bio, aadharNumber, panNumber,
+            serviceIds 
         } = body
 
         // Validate
@@ -63,7 +59,6 @@ export async function POST(request: NextRequest) {
         const plainPassword = password
         const hashedPassword = await bcrypt.hash(password, 10)
 
-        // CHANGE: Transaction mein sab kuch ek saath — atomic operation
         const result = await db.$transaction(async (tx) => {
             // 1. Create User
             const user = await tx.user.create({
@@ -79,32 +74,27 @@ export async function POST(request: NextRequest) {
             })
 
             // 2. Create Provider
+            // CHANGE: commissionRate hata diya provider data se
             const provider = await tx.provider.create({
                 data: {
                     userId: user.id,
                     status: 'APPROVED',
                     experience: experience || 0,
                     bio: bio || null,
-                    commissionRate: commissionRate || 15,
                     isAvailable: true,
                     aadharNumber: aadharNumber || null,
                     panNumber: panNumber || null
                 }
             })
 
-            // 3. NEW: Validate serviceIds exist in Service table
-            // ═══════════════════════════════
-            // KYA: Service IDs verify karna before ProviderService creation
-            // KYUN: Foreign key constraint error se bachne ke liye
-            // ═══════════════════════════════
+            // 3. Validate serviceIds exist in Service table
             if (serviceIds && serviceIds.length > 0) {
-                // Fetch all services from database
                 const validServices = await tx.service.findMany({
                     where: {
                         id: {
                             in: serviceIds
                         },
-                        isActive: true  // Only active services
+                        isActive: true
                     },
                     select: {
                         id: true,
@@ -112,28 +102,21 @@ export async function POST(request: NextRequest) {
                     }
                 })
 
-                // Check if all serviceIds are valid
                 if (validServices.length === 0) {
                     throw new Error('No valid services found. Please select active services.')
                 }
 
                 if (validServices.length < serviceIds.length) {
-                    // Some services are invalid
                     const validIds = validServices.map(s => s.id)
                     const invalidIds = serviceIds.filter(id => !validIds.includes(id))
                     
                     console.warn(`Invalid service IDs detected: ${invalidIds.join(', ')}`)
                     
-                    // Option 1: Throw error (strict validation)
                     throw new Error(
                         `${invalidIds.length} service(s) not found or inactive. Valid services: ${validServices.length}`
                     )
-                    
-                    // Option 2: Only create for valid services (lenient - uncomment if needed)
-                    // serviceIds = validIds
                 }
 
-                // Create ProviderService entries only for valid services
                 await tx.providerService.createMany({
                     data: validServices.map((service) => ({
                         providerId: provider.id,
@@ -147,7 +130,6 @@ export async function POST(request: NextRequest) {
             return { user, provider }
         })
 
-        // SMS credentials (console in dev)
         if (process.env.NODE_ENV === 'development') {
             console.log('\n📧 ========== PROVIDER CREDENTIALS ==========')
             console.log(`Name: ${name}`)
@@ -167,7 +149,6 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error('Create Provider Error:', error)
         
-        // Handle Prisma constraint errors
         if (error instanceof Error) {
             if (error.message.includes('Foreign key constraint')) {
                 return NextResponse.json(

@@ -1,9 +1,9 @@
 /**
- * WHAT: OPS verifies POD/COD payment collection
+ * WHAT: OPS verifies Physical Cash POD/COD payment collection
  * WHY: 
- * - POD bookings ke liye bhi verification
- * - Payment link se payment aaya hai ya nahi
- * - Earning status SETTLED hoga
+ * - Only for Physical Cash POD (Razorpay Link POD auto-settles)
+ * - Adjusts base/commission proportionally if verified amount differs
+ * - Credits Provider Wallet and creates Company Ledger entries
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -43,10 +43,10 @@ export async function POST(
             )
         }
 
-        // FIX: Support both COD and POD
-        if (booking.paymentMethod !== 'COD' && booking.paymentMethod !== 'POD') {
+        // FIX: Support both COD and POD, but ONLY physical cash (no Razorpay link)
+        if ((booking.paymentMethod !== 'COD' && booking.paymentMethod !== 'POD') || booking.razorpayPaymentLinkId) {
             return NextResponse.json(
-                { success: false, error: 'This is not a COD/POD booking' },
+                { success: false, error: 'This is not a Physical Cash COD/POD booking' },
                 { status: 400 }
             )
         }
@@ -60,62 +60,104 @@ export async function POST(
         }
 
         const finalAmount = verifiedAmount || booking.codAmountCollected || booking.totalAmount
+        const ratio = finalAmount / booking.totalAmount;
 
-        await db.booking.update({
-            where: { id: bookingId },
-            data: {
-                codAmountCollected: finalAmount,
-                codVerifiedBy: user.userId,
-                codVerifiedAt: new Date(),
-                codDisputed: isDisputed || false,
-                paymentStatus: 'PAID',
-            }
-        })
+        // Calculate adjusted financials
+        const adjBase = booking.baseAmount * ratio;
+        const adjComm = booking.companyCommission * ratio;
+        const adjEarn = booking.providerEarningAmt * ratio;
+        const adjGst = (booking.cgstAmount + booking.sgstAmount) * ratio;
 
-        // Update payment record
-        await db.payment.updateMany({
-            where: { bookingId },
-            data: {
-                status: 'PAID',
-                paidAt: new Date(),
-            }
-        })
-
-        const earning = await db.providerEarning.findFirst({
-            where: { bookingId }
-        })
-
-        if (earning) {
-            if (finalAmount !== earning.gross) {
-                const provider = await db.provider.findUnique({
-                    where: { id: earning.providerId }
-                })
-                
-                if (provider) {
-                    const commission = finalAmount * (provider.commissionRate / 100)
-                    const net = finalAmount - commission
-                    
-                    await db.providerEarning.update({
-                        where: { id: earning.id },
-                        data: {
-                            gross: finalAmount,
-                            commission,
-                            net,
-                            status: 'SETTLED',
-                            settledAt: new Date(),
-                        }
-                    })
+        // ═══════════════════════════════
+        // DB TRANSACTION: Update everything atomically
+        // ═══════════════════════════════
+        await db.$transaction(async (tx) => {
+            // 1. Update Booking
+            await tx.booking.update({
+                where: { id: bookingId },
+                data: {
+                    codAmountCollected: finalAmount,
+                    codVerifiedBy: user.userId,
+                    codVerifiedAt: new Date(),
+                    codDisputed: isDisputed || false,
+                    paymentStatus: 'PAID',
                 }
-            } else {
-                await db.providerEarning.update({
-                    where: { id: earning.id },
-                    data: { 
-                        status: 'SETTLED',
-                        settledAt: new Date(),
+            });
+
+            // 2. Update Payment Record
+            await tx.payment.updateMany({
+                where: { bookingId },
+                data: { status: 'PAID', paidAt: new Date() }
+            });
+
+            // 3. Upsert Provider Earning
+            const earning = await tx.providerEarning.upsert({
+                where: { bookingId },
+                update: {
+                    gross: adjBase,
+                    commission: adjComm,
+                    net: adjEarn,
+                    status: 'SETTLED',
+                    settledAt: new Date(),
+                    collectedAmount: finalAmount,
+                    collectedAt: new Date(),
+                },
+                create: {
+                    providerId: booking.providerId!,
+                    bookingId: bookingId,
+                    gross: adjBase,
+                    commission: adjComm,
+                    net: adjEarn,
+                    status: 'SETTLED',
+                    settledAt: new Date(),
+                    paymentMethod: booking.paymentMethod!,
+                    collectedAmount: finalAmount,
+                    collectedAt: new Date(),
+                }
+            });
+
+            // 4. Credit Provider Wallet
+            const updatedProvider = await tx.provider.update({
+                where: { id: booking.providerId! },
+                data: { walletBalance: { increment: adjEarn } }
+            });
+
+            // 5. Create Wallet Transaction
+            const walletTxn = await tx.providerWalletTransaction.create({
+                data: {
+                    providerId: booking.providerId!,
+                    type: 'EARNING_CREDIT',
+                    amount: adjEarn,
+                    balanceAfter: updatedProvider.walletBalance,
+                    description: `Physical Cash POD Earning from booking #${booking.bookingNumber}`,
+                    bookingId: bookingId,
+                }
+            });
+
+            // 6. Link Wallet Txn to Earning
+            await tx.providerEarning.update({
+                where: { id: earning.id },
+                data: { walletTxnId: walletTxn.id }
+            });
+
+            // 7. Create Company Ledger Entries
+            await tx.companyLedger.createMany({
+                data: [
+                    { 
+                        type: 'COMMISSION_CREDIT', 
+                        amount: adjComm, 
+                        description: `Commission from Physical POD #${booking.bookingNumber}`, 
+                        bookingId: bookingId 
+                    },
+                    { 
+                        type: 'GST_COLLECTED', 
+                        amount: adjGst, 
+                        description: `GST from Physical POD #${booking.bookingNumber}`, 
+                        bookingId: bookingId 
                     }
-                })
-            }
-        }
+                ]
+            });
+        });
 
         await db.bookingAssignmentLog.create({
             data: {
@@ -142,7 +184,7 @@ export async function POST(
                 await sendNotification({
                     userId: booking.provider.userId,
                     title: 'Payment Verified',
-                    body: `Your ${booking.paymentMethod} collection of ₹${finalAmount} for booking #${booking.bookingNumber} has been verified.`,
+                    body: `Your ${booking.paymentMethod} collection of ₹${finalAmount} for booking #${booking.bookingNumber} has been verified and added to your wallet.`,
                     type: 'GENERAL',
                     referenceId: bookingId,
                 })

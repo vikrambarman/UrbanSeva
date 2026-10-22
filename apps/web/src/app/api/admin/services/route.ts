@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(searchParams.get('limit') || '10')
         const search = searchParams.get('search') || ''
         const isActive = searchParams.get('isActive')
+        // ═══════════════════════════════════════════════════════════════
+        // NEW: Category filter support
+        // ═══════════════════════════════════════════════════════════════
+        const categoryId = searchParams.get('categoryId') || ''
 
         const where: any = {}
         if (search) {
@@ -23,6 +27,12 @@ export async function GET(request: NextRequest) {
         if (isActive !== null && isActive !== '' && isActive !== 'ALL') {
             where.isActive = isActive === 'true'
         }
+        // ═══════════════════════════════════════════════════════════════
+        // NEW: Filter by category
+        // ═══════════════════════════════════════════════════════════════
+        if (categoryId && categoryId !== 'ALL') {
+            where.subCategory = { categoryId }
+        }
 
         const [services, total] = await Promise.all([
             db.service.findMany({
@@ -31,7 +41,23 @@ export async function GET(request: NextRequest) {
                 take: limit,
                 orderBy: { createdAt: 'desc' },
                 include: {
-                    subCategory: { select: { name: true, category: { select: { name: true } } } },
+                    subCategory: { 
+                        select: { 
+                            name: true, 
+                            category: { 
+                                select: { 
+                                    name: true,
+                                    // ═══════════════════════════════════════════════════════════════
+                                    // NEW: Include category GST & Commission info for table display
+                                    // ═══════════════════════════════════════════════════════════════
+                                    gstEnabled: true,
+                                    gstPercentage: true,
+                                    commissionType: true,
+                                    commissionValue: true,
+                                } 
+                            } 
+                        } 
+                    },
                     _count: { select: { bookings: true, reviews: true } }
                 }
             }),
@@ -69,6 +95,15 @@ export async function POST(request: NextRequest) {
                 subCategoryId: body.subCategoryId,
                 isTrending: body.isTrending || false,
                 isFeatured: body.isFeatured || false,
+                
+                // ═══════════════════════════════════════════════════════════════
+                // NEW: Service-level overrides for GST & Commission
+                // ═══════════════════════════════════════════════════════════════
+                gstEnabled: body.gstEnabled === undefined ? null : body.gstEnabled,
+                gstPercentage: (body.gstPercentage !== undefined && body.gstPercentage !== null && body.gstPercentage !== '') ? parseFloat(body.gstPercentage) : null,
+                commissionType: body.commissionType === undefined ? null : body.commissionType,
+                commissionValue: (body.commissionValue !== undefined && body.commissionValue !== null && body.commissionValue !== '') ? parseFloat(body.commissionValue) : null,
+
                 inclusions: body.inclusions ? { create: body.inclusions.map((text: string, i: number) => ({ text, sortOrder: i })) } : undefined,
                 exclusions: body.exclusions ? { create: body.exclusions.map((text: string, i: number) => ({ text, sortOrder: i })) } : undefined,
                 pricingTiers: body.pricingTiers ? { create: body.pricingTiers.map((tier: any, i: number) => ({ label: tier.label, price: tier.price, duration: tier.duration, sortOrder: i })) } : undefined,

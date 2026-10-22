@@ -1,8 +1,3 @@
-// apps/web/src/app/admin/providers/create/page.tsx
-// CHANGE: Checkbox click conflict fix kiya — div onClick hataya, sirf Checkbox ka onCheckedChange use kiya
-// CHANGE: Services properly select/deselect hongi ab
-// WHY: Pehle div aur Checkbox dono click handle kar rahe the — double toggle se selection cancel ho jata tha
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -45,6 +40,7 @@ export default function CreateProviderPage() {
     const [loadingCategories, setLoadingCategories] = useState(true)
     const [loadingServices, setLoadingServices] = useState(false)
 
+    // CHANGE: commissionRate hata diya formData se
     const [formData, setFormData] = useState({
         name: "",
         phone: "",
@@ -52,7 +48,6 @@ export default function CreateProviderPage() {
         password: "",
         experience: "0",
         bio: "",
-        commissionRate: "15",
         aadharNumber: "",
         panNumber: ""
     })
@@ -116,7 +111,6 @@ export default function CreateProviderPage() {
         toast.success("Password generated!")
     }
 
-    // CHANGE: Single toggle function — sirf Checkbox se call hoga
     const toggleService = (serviceId: string) => {
         setSelectedServices(prev => 
             prev.includes(serviceId)
@@ -159,12 +153,12 @@ export default function CreateProviderPage() {
         setLoading(true)
 
         try {
+            // CHANGE: commissionRate hata diya body se
             const res = await apiFetch('/api/admin/providers/create', {
                 method: 'POST',
                 body: JSON.stringify({
                     ...formData,
                     experience: parseInt(formData.experience),
-                    commissionRate: parseFloat(formData.commissionRate),
                     serviceIds: selectedServices,
                 })
             })
@@ -277,29 +271,16 @@ export default function CreateProviderPage() {
                                 </p>
                             </div>
 
-                            <div className="grid md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="experience">Years of Experience</Label>
-                                    <Input
-                                        id="experience"
-                                        type="number"
-                                        value={formData.experience}
-                                        onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                                        min="0"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="commission">Commission Rate (%)</Label>
-                                    <Input
-                                        id="commission"
-                                        type="number"
-                                        value={formData.commissionRate}
-                                        onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
-                                        min="0"
-                                        max="100"
-                                        step="0.5"
-                                    />
-                                </div>
+                            {/* CHANGE: Commission rate hata diya, sirf experience rakha */}
+                            <div className="space-y-2">
+                                <Label htmlFor="experience">Years of Experience</Label>
+                                <Input
+                                    id="experience"
+                                    type="number"
+                                    value={formData.experience}
+                                    onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                                    min="0"
+                                />
                             </div>
 
                             <div className="grid md:grid-cols-2 gap-4">
@@ -404,7 +385,6 @@ export default function CreateProviderPage() {
                                     ) : (
                                         <div className="max-h-80 overflow-y-auto space-y-2 border rounded-lg p-3">
                                             {services.map((service) => (
-                                                // CHANGE: div se onClick hata diya — ab sirf Checkbox handle karega
                                                 <div
                                                     key={service.id}
                                                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${

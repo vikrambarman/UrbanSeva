@@ -16,8 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { 
-    CreditCard, CheckCircle2, Clock, XCircle, 
+import {
+    CreditCard, CheckCircle2, Clock, XCircle,
     AlertCircle, IndianRupee, Search, Filter
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-client"
@@ -89,15 +89,19 @@ export default function OpsPayoutsPage() {
             toast.error('Transaction reference is required for approval')
             return
         }
+        if (action === 'reject' && !notes.trim()) {
+            toast.error('Rejection reason is required')
+            return
+        }
 
         setProcessing(true)
         try {
             const res = await apiFetch(`/api/ops/payouts/${selectedPayout.id}/approve`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    action,
-                    transactionReference: transactionRef,
-                    notes,
+                    action: action.toUpperCase(), // 'APPROVE' or 'REJECT'
+                    transactionId: action === 'approve' ? transactionRef : null,
+                    rejectionReason: action === 'reject' ? notes : null,
                 })
             })
             const data = await res.json()
@@ -133,7 +137,7 @@ export default function OpsPayoutsPage() {
         }
     }
 
-    const filteredPayouts = payouts.filter(p => 
+    const filteredPayouts = payouts.filter(p =>
         p.provider.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.provider.user.phone.includes(searchQuery)
     )
@@ -204,14 +208,12 @@ export default function OpsPayoutsPage() {
                             {filteredPayouts.map((payout) => (
                                 <div key={payout.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                                     <div className="flex items-center gap-4">
-                                        <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
-                                            payout.status === 'COMPLETED' ? 'bg-green-100' :
-                                            payout.status === 'FAILED' ? 'bg-red-100' : 'bg-amber-100'
-                                        }`}>
-                                            <IndianRupee className={`h-6 w-6 ${
-                                                payout.status === 'COMPLETED' ? 'text-green-600' :
-                                                payout.status === 'FAILED' ? 'text-red-600' : 'text-amber-600'
-                                            }`} />
+                                        <div className={`h-12 w-12 rounded-full flex items-center justify-center ${payout.status === 'COMPLETED' ? 'bg-green-100' :
+                                                payout.status === 'FAILED' ? 'bg-red-100' : 'bg-amber-100'
+                                            }`}>
+                                            <IndianRupee className={`h-6 w-6 ${payout.status === 'COMPLETED' ? 'text-green-600' :
+                                                    payout.status === 'FAILED' ? 'text-red-600' : 'text-amber-600'
+                                                }`} />
                                         </div>
                                         <div>
                                             <p className="font-semibold">{payout.provider.user.name}</p>
@@ -235,8 +237,8 @@ export default function OpsPayoutsPage() {
                                             {getStatusBadge(payout.status)}
                                         </div>
                                         {payout.status === 'PENDING' && (
-                                            <Button 
-                                                size="sm" 
+                                            <Button
+                                                size="sm"
                                                 onClick={() => {
                                                     setSelectedPayout(payout)
                                                     setAction('approve')
@@ -256,9 +258,9 @@ export default function OpsPayoutsPage() {
             {/* Pagination */}
             {totalPages > 1 && (
                 <div className="flex justify-center gap-2">
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
+                    <Button
+                        variant="outline"
+                        size="sm"
                         disabled={page === 1}
                         onClick={() => setPage(p => p - 1)}
                     >
@@ -267,9 +269,9 @@ export default function OpsPayoutsPage() {
                     <span className="flex items-center px-4 text-sm text-muted-foreground">
                         Page {page} of {totalPages}
                     </span>
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
+                    <Button
+                        variant="outline"
+                        size="sm"
                         disabled={page === totalPages}
                         onClick={() => setPage(p => p + 1)}
                     >
@@ -279,6 +281,7 @@ export default function OpsPayoutsPage() {
             )}
 
             {/* Process Payout Modal */}
+            {/* Process Payout Modal - Sirf Labels update hain */}
             <Dialog open={!!selectedPayout} onOpenChange={() => setSelectedPayout(null)}>
                 <DialogContent>
                     <DialogHeader>
@@ -291,58 +294,31 @@ export default function OpsPayoutsPage() {
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="flex gap-2">
-                            <Button
-                                variant={action === 'approve' ? 'default' : 'outline'}
-                                onClick={() => setAction('approve')}
-                                className="flex-1"
-                            >
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Approve
+                            <Button variant={action === 'approve' ? 'default' : 'outline'} onClick={() => setAction('approve')} className="flex-1">
+                                <CheckCircle2 className="h-4 w-4 mr-2" /> Approve
                             </Button>
-                            <Button
-                                variant={action === 'reject' ? 'destructive' : 'outline'}
-                                onClick={() => setAction('reject')}
-                                className="flex-1"
-                            >
-                                <XCircle className="h-4 w-4 mr-2" />
-                                Reject
+                            <Button variant={action === 'reject' ? 'destructive' : 'outline'} onClick={() => setAction('reject')} className="flex-1">
+                                <XCircle className="h-4 w-4 mr-2" /> Reject
                             </Button>
                         </div>
 
                         {action === 'approve' && (
                             <div className="space-y-2">
-                                <Label>Transaction Reference *</Label>
-                                <Input
-                                    value={transactionRef}
-                                    onChange={(e) => setTransactionRef(e.target.value)}
-                                    placeholder="UTR / Transaction ID / Reference number"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Enter the transaction reference after making the payment
-                                </p>
+                                <Label>Transaction ID / UTR *</Label>
+                                <Input value={transactionRef} onChange={(e) => setTransactionRef(e.target.value)} placeholder="Enter transaction reference after payment" />
                             </div>
                         )}
 
-                        <div className="space-y-2">
-                            <Label>Notes (Optional)</Label>
-                            <Textarea
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Any additional notes..."
-                                rows={3}
-                            />
-                        </div>
+                        {action === 'reject' && (
+                            <div className="space-y-2">
+                                <Label>Rejection Reason *</Label>
+                                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Why is this payout being rejected?" rows={3} />
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-3">
-                        <Button variant="outline" onClick={() => setSelectedPayout(null)} className="flex-1">
-                            Cancel
-                        </Button>
-                        <Button 
-                            onClick={handleProcessPayout}
-                            disabled={processing}
-                            variant={action === 'reject' ? 'destructive' : 'default'}
-                            className="flex-1"
-                        >
+                        <Button variant="outline" onClick={() => setSelectedPayout(null)} className="flex-1">Cancel</Button>
+                        <Button onClick={handleProcessPayout} disabled={processing} variant={action === 'reject' ? 'destructive' : 'default'} className="flex-1">
                             {processing ? 'Processing...' : action === 'approve' ? 'Approve & Mark Paid' : 'Reject Request'}
                         </Button>
                     </div>

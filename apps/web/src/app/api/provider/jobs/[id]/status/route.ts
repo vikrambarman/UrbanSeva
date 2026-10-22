@@ -1,10 +1,10 @@
 /**
  * WHAT: Provider job status update with POD/Online payment handling
  * WHY: 
- * - POD earnings alag track honge (paymentMethod: 'POD')
- * - Online earnings auto-settle honge (paymentMethod: 'ONLINE')
- * - Commission calculation admin settings se aayega (percentage/fixed)
- * - GST breakdown accounting ke liye save hoga
+ * - Commission is now calculated on BASE amount (GST exclusive)
+ * - Online & Razorpay Link POD earnings auto-settle to Provider Wallet
+ * - Physical Cash POD earnings stay PENDING_VERIFICATION until OPS verifies
+ * - Company Ledger entries are created for commission and GST tracking
  * NOTE: Provider "Collect Payment" button dabayega POD ke liye (Phase 4 mein)
  */
 
@@ -13,43 +13,6 @@ import { db } from '@/lib/db'
 import { getProviderUser } from '@/lib/auth'
 import { sendNotification } from '@/lib/notifications'
 import { cancelBookingWithRefund } from '@/lib/booking-helpers'
-
-// Helper: Fetch admin settings
-async function getAdminSettings() {
-    const settings = await db.appSetting.findMany()
-    const formatted = settings.reduce((acc, curr) => {
-        acc[curr.key] = curr.value
-        return acc
-    }, {} as Record<string, string>)
-    return formatted
-}
-
-// Helper: Calculate commission based on admin settings
-function calculateCommission(
-    baseAmount: number,
-    providerCommissionRate: number,
-    settings: Record<string, string>
-): { commission: number; net: number } {
-    const commissionType = settings.COMMISSION_TYPE || 'PERCENTAGE'
-    const defaultCommission = parseFloat(settings.DEFAULT_COMMISSION || '20')
-
-    // Use provider-specific rate if set, otherwise use default
-    const rate = providerCommissionRate > 0 ? providerCommissionRate : defaultCommission
-
-    let commission: number
-
-    if (commissionType === 'FIXED') {
-        // Fixed amount commission
-        commission = rate
-    } else {
-        // Percentage commission
-        commission = baseAmount * (rate / 100)
-    }
-
-    const net = baseAmount - commission
-
-    return { commission, net }
-}
 
 export async function POST(
     request: NextRequest,
@@ -72,7 +35,6 @@ export async function POST(
         const booking = await db.booking.findUnique({
             where: { id },
             include: {
-                // ✅ FIX: Added email to user select for Payment Link generation
                 user: { select: { id: true, name: true, phone: true, email: true } },
                 service: {
                     select: {
@@ -84,10 +46,10 @@ export async function POST(
         })
         if (!booking) return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 })
 
-        const settings = await getAdminSettings()
         let newStatus = booking.status
         let updateData: any = {}
         const paymentMethod = booking.paymentMethod || 'ONLINE'
+        const isRazorpayPod = !!booking.razorpayPaymentLinkId
 
         switch (action) {
             case 'accept':
@@ -99,7 +61,6 @@ export async function POST(
                 break
 
             case 'reject': {
-                // ✅ FIX: Use shared cancellation+refund logic instead of just updating status
                 const cancelResult = await cancelBookingWithRefund(
                     booking.id,
                     'PROVIDER',
@@ -116,7 +77,6 @@ export async function POST(
                     return NextResponse.json({ success: false, error: cancelResult.error }, { status: 400 })
                 }
 
-                // ✅ Early return since cancelBookingWithRefund already updated booking + history
                 return NextResponse.json({
                     success: true,
                     message: `Job rejected. Refund of ₹${cancelResult.data?.refundAmount} processed for customer.`,
@@ -132,15 +92,15 @@ export async function POST(
                     data: { currentWorkStatus: 'WORKING' }
                 })
 
-                // 🚀 POD: Auto-generate Payment Link when service starts
-                if (paymentMethod === 'POD' || paymentMethod === 'COD') {
+                // 🚀 POD: Auto-generate Payment Link when service starts (Only for physical POD, not if already generated)
+                if ((paymentMethod === 'POD' || paymentMethod === 'COD') && !isRazorpayPod) {
                     try {
                         const { createPaymentLink } = await import('@/lib/razorpay')
                         const linkRes = await createPaymentLink(
                             booking.totalAmount,
                             'INR',
                             booking.user.phone,
-                            booking.user.name || 'Customer',   // ✅ FIX: null fallback
+                            booking.user.name || 'Customer',   
                             booking.bookingNumber,
                             booking.user.email || undefined
                         )
@@ -148,10 +108,7 @@ export async function POST(
                         if (linkRes.success) {
                             updateData.razorpayPaymentLinkId = linkRes.paymentLinkId
                             updateData.razorpayPaymentLinkUrl = linkRes.paymentLinkUrl
-                            console.log(`[POD] Payment link generated for booking ${booking.bookingNumber}: ${linkRes.paymentLinkUrl}`)
-
-                            // Note: Razorpay auto-sends SMS/Email. 
-                            // TODO: Integrate MSG91/Fast2SMS for custom WhatsApp/SMS when DLT is ready.
+                            console.log(`[POD] Payment link generated for booking ${booking.bookingNumber}`)
                         } else {
                             console.error('[POD] Failed to generate payment link:', linkRes.error)
                         }
@@ -164,7 +121,7 @@ export async function POST(
                     await sendNotification({
                         userId: booking.userId,
                         title: 'Service Started',
-                        body: `${provider.user?.name || 'Provider'} has started your service for booking #${booking.bookingNumber}. ${paymentMethod === 'POD' || paymentMethod === 'COD' ? 'Please complete the payment using the link sent to you.' : ''}`,
+                        body: `${provider.user?.name || 'Provider'} has started your service for booking #${booking.bookingNumber}. ${(paymentMethod === 'POD' || paymentMethod === 'COD') ? 'Please complete the payment using the link sent to you.' : ''}`,
                         type: 'SERVICE_STARTED',
                         referenceId: booking.id,
                     })
@@ -174,7 +131,7 @@ export async function POST(
                 break
 
             case 'complete':
-                // ✅ NEW: Block completion for POD/COD if payment not yet confirmed via webhook
+                // ✅ Block completion for POD/COD if payment not yet confirmed via webhook
                 if ((paymentMethod === 'POD' || paymentMethod === 'COD') && booking.paymentStatus !== 'PAID') {
                     return NextResponse.json({
                         success: false,
@@ -186,43 +143,102 @@ export async function POST(
                 updateData.completedAt = new Date()
                 if (photos) updateData.afterPhotos = photos
 
-                if (paymentMethod === 'POD' || paymentMethod === 'COD') {
-                    const collectedAmount = codAmountCollected || booking.totalAmount
-                    updateData.codAmountCollected = collectedAmount
-                    const { commission, net } = calculateCommission(collectedAmount, provider.commissionRate, settings)
-
-                    await db.providerEarning.create({
-                        data: {
-                            providerId: provider.id, bookingId: booking.id,
-                            gross: collectedAmount, commission, net,
-                            status: 'PENDING_VERIFICATION', paymentMethod: 'POD',
-                            collectedAmount: collectedAmount, collectedAt: new Date(),
-                        }
-                    })
-                } else {
-                    const { commission, net } = calculateCommission(booking.totalAmount, provider.commissionRate, settings)
-                    await db.providerEarning.create({
-                        data: {
-                            providerId: provider.id, bookingId: booking.id,
-                            gross: booking.totalAmount, commission, net,
-                            status: 'SETTLED', paymentMethod: 'ONLINE', settledAt: new Date(),
-                        }
-                    })
-                    await db.payment.updateMany({ where: { bookingId: booking.id }, data: { status: 'PAID' } })
+                // ═══════════════════════════════
+                // FINANCIAL SETTLEMENT LOGIC
+                // ═══════════════════════════════
+                
+                // Determine if this is Physical Cash (needs OPS verification) or Online/Razorpay Link (auto-settle)
+                const isPhysicalCashPod = (paymentMethod === 'POD' || paymentMethod === 'COD') && !isRazorpayPod;
+                
+                // Calculate final amounts (adjust proportionally if COD amount differs from total)
+                let finalTotal = booking.totalAmount;
+                let ratio = 1;
+                
+                if (isPhysicalCashPod) {
+                    finalTotal = codAmountCollected || booking.totalAmount;
+                    updateData.codAmountCollected = finalTotal;
+                    ratio = finalTotal / booking.totalAmount;
                 }
 
+                const adjBase = booking.baseAmount * ratio;
+                const adjComm = booking.companyCommission * ratio;
+                const adjEarn = booking.providerEarningAmt * ratio;
+                const adjGst = (booking.cgstAmount + booking.sgstAmount) * ratio;
+
+                // 1. Create/Update Provider Earning Record
+                const earningStatus = isPhysicalCashPod ? 'PENDING_VERIFICATION' : 'SETTLED';
+                
+                await db.providerEarning.create({
+                    data: {
+                        providerId: provider.id, 
+                        bookingId: booking.id,
+                        gross: adjBase, 
+                        commission: adjComm, 
+                        net: adjEarn,
+                        status: earningStatus, 
+                        paymentMethod: paymentMethod,
+                        collectedAmount: isPhysicalCashPod ? finalTotal : null,
+                        collectedAt: isPhysicalCashPod ? new Date() : null,
+                        settledAt: !isPhysicalCashPod ? new Date() : null,
+                    }
+                });
+
+                // 2. Update Provider Stats
                 await db.provider.update({
                     where: { id: provider.id },
                     data: {
                         totalJobs: { increment: 1 },
-                        totalEarnings: {
-                            increment: paymentMethod === 'POD' || paymentMethod === 'COD'
-                                ? (codAmountCollected || booking.totalAmount) - calculateCommission(codAmountCollected || booking.totalAmount, provider.commissionRate, settings).commission
-                                : booking.totalAmount - calculateCommission(booking.totalAmount, provider.commissionRate, settings).commission
-                        },
-                        currentWorkStatus: 'AVAILABLE', currentJobId: null
+                        currentWorkStatus: 'AVAILABLE', 
+                        currentJobId: null
                     }
-                })
+                });
+
+                // 3. If Online or Razorpay Link POD -> Auto-settle to Wallet & Ledger
+                if (!isPhysicalCashPod) {
+                    await db.$transaction(async (tx) => {
+                        // Credit Provider Wallet
+                        const updatedProvider = await tx.provider.update({
+                            where: { id: provider.id },
+                            data: { walletBalance: { increment: adjEarn } }
+                        });
+
+                        // Create Wallet Transaction
+                        const walletTxn = await tx.providerWalletTransaction.create({
+                            data: {
+                                providerId: provider.id,
+                                type: 'EARNING_CREDIT',
+                                amount: adjEarn,
+                                balanceAfter: updatedProvider.walletBalance,
+                                description: `Earning from booking #${booking.bookingNumber}`,
+                                bookingId: booking.id,
+                            }
+                        });
+
+                        // Link Wallet Txn to Earning
+                        await tx.providerEarning.update({
+                            where: { bookingId: booking.id },
+                            data: { walletTxnId: walletTxn.id }
+                        });
+
+                        // Create Company Ledger Entries
+                        await tx.companyLedger.createMany({
+                            data: [
+                                { 
+                                    type: 'COMMISSION_CREDIT', 
+                                    amount: adjComm, 
+                                    description: `Commission from booking #${booking.bookingNumber}`, 
+                                    bookingId: booking.id 
+                                },
+                                { 
+                                    type: 'GST_COLLECTED', 
+                                    amount: adjGst, 
+                                    description: `GST from booking #${booking.bookingNumber}`, 
+                                    bookingId: booking.id 
+                                }
+                            ]
+                        });
+                    });
+                }
 
                 try {
                     await sendNotification({
@@ -270,8 +286,8 @@ export async function POST(
         return NextResponse.json({
             success: true,
             data: updatedBooking,
-            message: action === 'complete' && (paymentMethod === 'POD' || paymentMethod === 'COD')
-                ? 'Service completed. POD amount pending OPS verification.'
+            message: action === 'complete' && (paymentMethod === 'POD' || paymentMethod === 'COD') && !isRazorpayPod
+                ? 'Service completed. Physical cash POD amount pending OPS verification.'
                 : `Job ${action}ed successfully!`
         })
     } catch (error) {

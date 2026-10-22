@@ -1,75 +1,108 @@
-/**
- * WHAT: Provider requests payout
- * WHY: 
- * - Provider settled earnings ko withdraw karega
- * - Payout request OPS ko jayegi approval ke liye
- * - Provider payout method select karega (Bank/UPI)
- * NOTE: Only SETTLED earnings can be withdrawn
- */
-
+// Provider Payout Request
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderUser } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
     try {
-        const providerAuth = await getProviderUser(request)
-        if (!providerAuth) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-
-        const provider = await db.provider.findUnique({ 
-            where: { userId: providerAuth.userId },
-            include: { user: { select: { name: true, phone: true } } }
-        })
-        if (!provider) return NextResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
+        const provider = await getProviderUser(request)
+        if (!provider) {
+            return NextResponse.json(
+                { success: false, error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
 
         const body = await request.json()
-        const { amount, payoutMethod, payoutDetails } = body
+        const { amount, method, bankDetails, upiId, notes } = body
 
+        // Validate
         if (!amount || amount <= 0) {
-            return NextResponse.json({ success: false, error: 'Invalid amount' }, { status: 400 })
+            return NextResponse.json(
+                { success: false, error: 'Invalid amount' },
+                { status: 400 }
+            )
         }
 
-        // Check available balance (SETTLED earnings)
-        const settledEarnings = await db.providerEarning.aggregate({
-            where: { 
-                providerId: provider.id, 
-                status: 'SETTLED' 
-            },
-            _sum: { net: true }
+        if (!method || !['BANK_TRANSFER', 'UPI', 'CASH'].includes(method)) {
+            return NextResponse.json(
+                { success: false, error: 'Invalid payout method' },
+                { status: 400 }
+            )
+        }
+
+        // Get provider data
+        const providerData = await db.provider.findUnique({
+            where: { userId: provider.userId },
+            select: {
+                id: true,
+                walletBalance: true
+            }
         })
 
-        const availableBalance = settledEarnings._sum.net || 0
-
-        if (amount > availableBalance) {
-            return NextResponse.json({ 
-                success: false, 
-                error: `Insufficient balance. Available: ₹${availableBalance}` 
-            }, { status: 400 })
+        if (!providerData) {
+            return NextResponse.json(
+                { success: false, error: 'Provider not found' },
+                { status: 404 }
+            )
         }
 
-        // Validate payout method
-        if (!['BANK_TRANSFER', 'UPI', 'CASH'].includes(payoutMethod)) {
-            return NextResponse.json({ success: false, error: 'Invalid payout method' }, { status: 400 })
+        // Check if sufficient balance
+        if (providerData.walletBalance < amount) {
+            return NextResponse.json(
+                { success: false, error: 'Insufficient wallet balance' },
+                { status: 400 }
+            )
+        }
+
+        // Check for any pending payout request
+        const pendingPayout = await db.payout.findFirst({
+            where: {
+                providerId: providerData.id,
+                status: 'PENDING'
+            }
+        })
+
+        if (pendingPayout) {
+            return NextResponse.json(
+                { success: false, error: 'You already have a pending payout request' },
+                { status: 400 }
+            )
         }
 
         // Create payout request
         const payout = await db.payout.create({
             data: {
-                providerId: provider.id,
+                providerId: providerData.id,
                 amount,
-                method: payoutMethod,
-                status: 'PENDING',
-                reference: payoutDetails?.reference || null,
+                method,
+                bankDetails: bankDetails || null,
+                upiId: upiId || null,
+                notes: notes || null,
+                status: 'PENDING'
             }
         })
 
-        // Mark earnings as PAYOUT_INITIATED
-        await db.providerEarning.updateMany({
-            where: { 
-                providerId: provider.id, 
-                status: 'SETTLED' 
-            },
-            data: { status: 'PAYOUT_INITIATED' }
+        // Deduct from wallet balance (hold the amount)
+        await db.provider.update({
+            where: { id: providerData.id },
+            data: {
+                walletBalance: {
+                    decrement: amount
+                }
+            }
+        })
+
+        // Create wallet transaction
+        await db.providerWalletTransaction.create({
+            data: {
+                providerId: providerData.id,
+                type: 'PAYOUT_HOLD',
+                amount,
+                description: `Payout request #${payout.id} - Amount held`,
+                referenceId: payout.id,
+                balanceAfter: providerData.walletBalance - amount
+            }
         })
 
         return NextResponse.json({
@@ -79,7 +112,71 @@ export async function POST(request: NextRequest) {
         })
 
     } catch (error) {
-        console.error('Payout request error:', error)
-        return NextResponse.json({ success: false, error: 'Failed to create payout request' }, { status: 500 })
+        console.error('Payout Request Error:', error)
+        return NextResponse.json(
+            { success: false, error: 'Failed to submit payout request' },
+            { status: 500 }
+        )
+    }
+}
+
+// Get provider's payout history
+export async function GET(request: NextRequest) {
+    try {
+        const provider = await getProviderUser(request)
+        if (!provider) {
+            return NextResponse.json(
+                { success: false, error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
+
+        const providerData = await db.provider.findUnique({
+            where: { userId: provider.userId },
+            select: { id: true }
+        })
+
+        if (!providerData) {
+            return NextResponse.json(
+                { success: false, error: 'Provider not found' },
+                { status: 404 }
+            )
+        }
+
+        const { searchParams } = new URL(request.url)
+        const page = parseInt(searchParams.get('page') || '1')
+        const limit = parseInt(searchParams.get('limit') || '10')
+        const skip = (page - 1) * limit
+
+        const payouts = await db.payout.findMany({
+            where: { providerId: providerData.id },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit
+        })
+
+        const totalPayouts = await db.payout.count({
+            where: { providerId: providerData.id }
+        })
+
+        return NextResponse.json({
+            success: true,
+            data: {
+                payouts,
+                pagination: {
+                    page,
+                    limit,
+                    total: totalPayouts,
+                    totalPages: Math.ceil(totalPayouts / limit)
+                }
+            }
+        })
+
+    } catch (error) {
+        console.error('Payout History Error:', error)
+        return NextResponse.json(
+            { success: false, error: 'Failed to fetch payout history' },
+            { status: 500 }
+        )
     }
 }

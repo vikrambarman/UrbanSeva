@@ -1,10 +1,11 @@
 /**
- * WHAT: Booking detail page with visual timeline
+ * WHAT: Booking detail page with visual timeline + Refund Request
  * WHY: 
  * - Visual timeline for status tracking
  * - Remove emojis, use Lucide icons only
  * - Better provider section with contact options
  * - Support new status flow
+ * - NEW: Refund request button for completed bookings
  * NOTE: Backward compatible
  */
 
@@ -16,6 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import {
   Calendar,
   Clock,
@@ -27,9 +31,9 @@ import {
   MessageCircle,
   CheckCircle2,
   Circle,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react'
-import Image from 'next/image'
 import { toast } from 'sonner'
 import { ServiceImageWithFallback } from '@/components/services/ServiceImageWithFallback'
 
@@ -90,37 +94,36 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<BookingDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Refund Request State
+  // ═══════════════════════════════════════════════════════════════
+  const [refundModal, setRefundModal] = useState(false)
+  const [refundReason, setRefundReason] = useState('')
+  const [requestingRefund, setRequestingRefund] = useState(false)
+
   useEffect(() => {
     fetchBooking()
   }, [params.id])
 
-
-  useEffect(() => {
-    fetchBooking()
-  }, [params.id])
-
-  // ✅ NEW: Auto-refresh every 10 seconds for active bookings
+  // Auto-refresh every 10 seconds for active bookings
   useEffect(() => {
     if (!booking) return
 
-    // Terminal states jahan polling band ho jani chahiye
     const terminalStatuses = [
       'SERVICE_COMPLETED', 'CANCELLED', 'CANCELLED_BY_CUSTOMER',
       'CANCELLED_BY_OPS', 'CANCELLED_BY_PROVIDER', 'REFUNDED', 'REFUND_INITIATED'
     ]
     const isTerminal = terminalStatuses.includes(booking.status)
 
-    // Agar booking active hai, toh har 10 second mein refresh karo
     if (isTerminal) return
 
     const interval = setInterval(() => {
-      fetchBooking(true) // silent refresh
-    }, 10000) // 10 seconds
+      fetchBooking(true)
+    }, 10000)
 
     return () => clearInterval(interval)
   }, [booking?.status, params.id])
 
-  // ✅ FIX: silent parameter add kiya taaki polling mein UI flash na ho
   const fetchBooking = async (silent = false) => {
     try {
       const token = localStorage.getItem('token')
@@ -145,11 +148,70 @@ export default function BookingDetailPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Refund Request Handler
+  // ═══════════════════════════════════════════════════════════════
+  const handleRequestRefund = async () => {
+    if (!refundReason.trim() || refundReason.trim().length < 10) {
+      toast.error('Please provide a detailed reason (minimum 10 characters)')
+      return
+    }
+
+    setRequestingRefund(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/customer/bookings/${params.id}/request-refund`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: refundReason }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success(data.message)
+        setRefundModal(false)
+        setRefundReason('')
+        fetchBooking() // Refresh booking data
+      } else {
+        toast.error(data.error || 'Failed to submit refund request')
+      }
+    } catch (error) {
+      console.error('Refund request error:', error)
+      toast.error('Failed to submit refund request')
+    } finally {
+      setRequestingRefund(false)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Check if refund can be requested
+  // ═══════════════════════════════════════════════════════════════
+  const canRequestRefund = () => {
+    if (!booking) return false
+    
+    // Only for completed or no-show bookings
+    const eligibleStatuses = ['SERVICE_COMPLETED', 'NO_SHOW']
+    if (!eligibleStatuses.includes(booking.status)) return false
+    
+    // Only if payment was made
+    if (booking.paymentStatus !== 'PAID') return false
+    
+    // Only for online payments (not POD/COD)
+    const onlinePayments = ['ONLINE', 'RAZORPAY_LINK']
+    if (!booking.paymentMethod || !onlinePayments.includes(booking.paymentMethod)) return false
+    
+    // Not already refunded or refund initiated
+    if (['REFUNDED', 'REFUND_INITIATED'].includes(booking.paymentStatus)) return false
+    
+    return true
+  }
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      // ✅ FIX: PAYMENT_RECEIVED means money actually received (ONLINE) → green
       PAYMENT_RECEIVED: 'bg-green-100 text-green-800 border-green-200',
-      // ✅ FIX: PENDING_CONFIRMATION means waiting (POD/COD not paid yet) → amber
       PENDING_CONFIRMATION: 'bg-amber-100 text-amber-800 border-amber-200',
       RESCHEDULE_PENDING: 'bg-orange-100 text-orange-800 border-orange-200',
       PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -162,6 +224,8 @@ export default function BookingDetailPage() {
       CANCELLED_BY_CUSTOMER: 'bg-red-100 text-red-800 border-red-200',
       CANCELLED_BY_OPS: 'bg-red-100 text-red-800 border-red-200',
       CANCELLED_BY_PROVIDER: 'bg-red-100 text-red-800 border-red-200',
+      REFUND_INITIATED: 'bg-amber-100 text-amber-800 border-amber-200',
+      REFUNDED: 'bg-green-100 text-green-800 border-green-200',
     }
     return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
   }
@@ -169,7 +233,6 @@ export default function BookingDetailPage() {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       PAYMENT_RECEIVED: 'Payment Received',
-      // ✅ FIX: Clearer label for POD/COD pending state
       PENDING_CONFIRMATION: 'Pending Confirmation',
       RESCHEDULE_PENDING: 'Reschedule Pending',
       PENDING: 'Pending',
@@ -182,6 +245,8 @@ export default function BookingDetailPage() {
       CANCELLED_BY_CUSTOMER: 'Cancelled',
       CANCELLED_BY_OPS: 'Cancelled',
       CANCELLED_BY_PROVIDER: 'Cancelled',
+      REFUND_INITIATED: 'Refund Requested',
+      REFUNDED: 'Refunded',
     }
     return labels[status] || status.replace(/_/g, ' ')
   }
@@ -191,6 +256,12 @@ export default function BookingDetailPage() {
       return <AlertCircle className="w-4 h-4 text-red-600" />
     }
     if (status === 'SERVICE_COMPLETED') {
+      return <CheckCircle2 className="w-4 h-4 text-green-600" />
+    }
+    if (status === 'REFUND_INITIATED') {
+      return <RotateCcw className="w-4 h-4 text-amber-600" />
+    }
+    if (status === 'REFUNDED') {
       return <CheckCircle2 className="w-4 h-4 text-green-600" />
     }
     if (isCurrent) {
@@ -471,19 +542,26 @@ export default function BookingDetailPage() {
                   <span className="text-primary">₹{booking.totalAmount}</span>
                 </div>
                 <div className="pt-2 space-y-2">
-                  {/* ✅ FIX: Show meaningful label based on payment method, not just raw status */}
                   <Badge className={
                     booking.paymentStatus === 'PAID'
                       ? 'bg-green-100 text-green-800 border-green-200'
-                      : 'bg-amber-100 text-amber-800 border-amber-200'
+                      : booking.paymentStatus === 'REFUND_INITIATED'
+                        ? 'bg-amber-100 text-amber-800 border-amber-200'
+                        : booking.paymentStatus === 'REFUNDED'
+                          ? 'bg-green-100 text-green-800 border-green-200'
+                          : 'bg-amber-100 text-amber-800 border-amber-200'
                   }>
                     {booking.paymentStatus === 'PAID'
                       ? 'Paid'
-                      : booking.paymentMethod === 'POD'
-                        ? 'Pay on Delivery - Pending'
-                        : booking.paymentMethod === 'COD'
-                          ? 'Cash on Delivery - Pending'
-                          : booking.paymentStatus}
+                      : booking.paymentStatus === 'REFUND_INITIATED'
+                        ? 'Refund Requested'
+                        : booking.paymentStatus === 'REFUNDED'
+                          ? 'Refunded'
+                          : booking.paymentMethod === 'POD'
+                            ? 'Pay on Delivery - Pending'
+                            : booking.paymentMethod === 'COD'
+                              ? 'Cash on Delivery - Pending'
+                              : booking.paymentStatus}
                   </Badge>
                   {booking.paymentMethod && (
                     <p className="text-xs text-muted-foreground">
@@ -498,6 +576,66 @@ export default function BookingDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* NEW: Refund Request Card */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {canRequestRefund() && (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <RotateCcw className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-amber-900">Not satisfied with the service?</p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        You can request a refund. Our team will review your request within 24-48 hours.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full border-amber-300 text-amber-900 hover:bg-amber-100"
+                    onClick={() => setRefundModal(true)}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Request Refund
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Refund Status Info */}
+            {booking.paymentStatus === 'REFUND_INITIATED' && (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-amber-900">Refund Request Pending</p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Your refund request is being reviewed. Amount: ₹{booking.totalAmount.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {booking.paymentStatus === 'REFUNDED' && (
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-green-900">Refund Processed</p>
+                      <p className="text-sm text-green-700 mt-1">
+                        ₹{booking.totalAmount.toLocaleString()} has been credited to your wallet.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Actions */}
             {(booking.status === 'PENDING' || booking.status === 'CONFIRMED' || booking.status === 'PENDING_CONFIRMATION') && (
@@ -527,6 +665,64 @@ export default function BookingDetailPage() {
             </Card>
           </div>
         </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* NEW: Refund Request Modal */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <Dialog open={refundModal} onOpenChange={setRefundModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Request Refund</DialogTitle>
+              <DialogDescription>
+                Booking: #{booking.bookingNumber}
+                <br />
+                Service: {booking.service.name}
+                <br />
+                Refund Amount: ₹{booking.totalAmount.toLocaleString()}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-900">Refund will be credited to your wallet</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Once approved, the refund amount will be added to your wallet balance which you can use for future bookings.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reason for Refund *</Label>
+                <Textarea
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  placeholder="Please describe why you're requesting a refund (minimum 10 characters)..."
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {refundReason.length}/10 characters minimum
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setRefundModal(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleRequestRefund}
+                disabled={requestingRefund || refundReason.trim().length < 10}
+                className="flex-1"
+              >
+                {requestingRefund ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

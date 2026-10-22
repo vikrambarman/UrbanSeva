@@ -17,7 +17,7 @@ enum Role {
   PROVIDER
   ADMIN
   SUPER_ADMIN
-  CALLING_TEAM    // ← Ops portal ke liye calling team members
+  CALLING_TEAM
 }
 
 enum LoyaltyTier {
@@ -42,37 +42,19 @@ enum ProviderStatus {
   SUSPENDED
 }
 
-// ═══════════════════════════════
-// BOOKING STATUS - PRODUCTION FLOW
-// ═══════════════════════════════
-// KYA: Complete booking lifecycle with verification workflow
-// KYUN: Real production flow - payment ke baad OPS verify karega,
-//       phir provider assign hoga, tab customer ko confirmation milega
-// NOTE: Legacy statuses (PENDING, CONFIRMED) rakhe hain backward compatibility ke liye
 enum BookingStatus {
-  // Legacy statuses (keep for backward compatibility)
   PENDING
   CONFIRMED
-  
-  // New Production Flow - Customer Journey
-  PAYMENT_RECEIVED      // Payment done, waiting OPS verification
-  PENDING_CONFIRMATION  // OPS verifying slot & provider availability
-  
-  // Confirmation Flow
-  RESCHEDULE_PENDING    // OPS proposed new slot, waiting customer OTP
-  
-  // Service Execution (existing)
+  PAYMENT_RECEIVED
+  PENDING_CONFIRMATION
+  RESCHEDULE_PENDING
   PROVIDER_ASSIGNED
   PROVIDER_TRAVELLING
   SERVICE_STARTED
   SERVICE_COMPLETED
-  
-  // Terminal States (existing)
   CANCELLED
   REFUND_INITIATED
   REFUNDED
-  
-  // New Terminal States - Granular cancellation tracking
   CANCELLED_BY_CUSTOMER
   CANCELLED_BY_OPS
   CANCELLED_BY_PROVIDER
@@ -80,30 +62,19 @@ enum BookingStatus {
   FAILED
 }
 
-// ═══════════════════════════════
-// PROVIDER WORK STATUS - REAL-TIME TRACKING
-// ═══════════════════════════════
-// KYA: Provider ka current real-time status
-// KYUN: OPS team ko pata hona chahiye ki provider available hai ya busy
-//       Agar provider WORKING hai, toh OPS ko warning milegi before assigning
 enum ProviderWorkStatus {
-  AVAILABLE     // Free, can take new jobs
-  ON_THE_WAY    // Going to customer location
-  WORKING       // Currently servicing customer
-  ON_BREAK      // Temporary break (30 mins max)
-  OFFLINE       // Not available for jobs
+  AVAILABLE
+  ON_THE_WAY
+  WORKING
+  ON_BREAK
+  OFFLINE
 }
 
-// ═══════════════════════════════
-// RESCHEDULE STATUS - OTP CONFIRMATION
-// ═══════════════════════════════
-// KYA: Reschedule request ka status
-// KYUN: OPS ne naya slot propose kiya, customer ko OTP se confirm karna hai
 enum RescheduleStatus {
-  PENDING    // Waiting for customer OTP
-  CONFIRMED  // Customer confirmed via OTP
-  REJECTED   // Customer rejected or OTP expired
-  CANCELLED  // OPS cancelled the request
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
 }
 
 enum PaymentStatus {
@@ -115,12 +86,36 @@ enum PaymentStatus {
   PARTIALLY_REFUNDED
 }
 
+// Customer Wallet (Existing)
 enum WalletTxnType {
   CREDIT
   DEBIT
   REFUND
   REFERRAL_BONUS
   CASHBACK
+}
+
+// NEW: Provider Wallet Transactions
+enum ProviderWalletTxnType {
+  EARNING_CREDIT      // Job complete hone pe earning
+  PAYOUT_HOLD         // Payout request pe amount hold
+  PAYOUT_COMPLETED    // Payout successfully complete hua
+  PAYOUT_REFUND       // Payout reject hone pe refund
+  ADJUSTMENT          // Manual adjustment by admin
+}
+
+// NEW: Company Financial Ledger
+enum CompanyLedgerType {
+  COMMISSION_CREDIT
+  GST_COLLECTED
+  PAYOUT_DEBIT
+  REFUND_DEBIT
+}
+
+// NEW: Commission Configuration
+enum CommissionType {
+  PERCENTAGE
+  FIXED
 }
 
 enum DiscountType {
@@ -130,17 +125,18 @@ enum DiscountType {
 
 enum EarningStatus {
   PENDING
-  PENDING_VERIFICATION  // NEW: COD needs OPS verification
+  PENDING_VERIFICATION
   SETTLED
   PAYOUT_INITIATED
   PAID
 }
 
 enum PayoutStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
+  PENDING             // Request submitted, waiting for approval
+  PROCESSING          // Being processed by OPS
+  COMPLETED           // Payment done successfully
+  REJECTED            // Request rejected
+  FAILED              // Payment failed
 }
 
 enum NotificationType {
@@ -154,10 +150,9 @@ enum NotificationType {
   REVIEW_REQUEST
   OFFER
   GENERAL
-  // New notification types
-  BOOKING_RECEIVED          // Payment done, waiting confirmation
-  RESCHEDULE_REQUESTED      // OPS proposed new slot
-  PROVIDER_ON_THE_WAY       // Provider going to location
+  BOOKING_RECEIVED
+  RESCHEDULE_REQUESTED
+  PROVIDER_ON_THE_WAY
 }
 
 enum PropertyType {
@@ -232,15 +227,13 @@ model User {
   walletBalance Float       @default(0)
   loyaltyPoints Int         @default(0)
   loyaltyTier   LoyaltyTier @default(BRONZE)
-  
-  // Login tracking
-  lastLoginAt   DateTime?
-  loginCount    Int         @default(0)
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
-  // Relations
+
+  lastLoginAt DateTime?
+  loginCount  Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   bookings      Booking[]
   reviews       Review[]
   addresses     Address[]
@@ -249,11 +242,10 @@ model User {
   provider      Provider?
   properties    Property[]
   subscriptions UserSubscription[]
-  
-  // Calling Team Portal
-  staffCategories      StaffCategory[]        @relation("StaffCategories")
-  assignedCategories   StaffCategory[]        @relation("StaffCategoryAssignedBy")
-  assignmentLogs       BookingAssignmentLog[] @relation("AssignmentLogs")
+
+  staffCategories    StaffCategory[]        @relation("StaffCategories")
+  assignedCategories StaffCategory[]        @relation("StaffCategoryAssignedBy")
+  assignmentLogs     BookingAssignmentLog[] @relation("AssignmentLogs")
 }
 
 model OTPVerification {
@@ -282,7 +274,7 @@ model Session {
 // ═══════════════════════════════
 
 model Address {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   userId      String
   label       String
   fullAddress String
@@ -291,8 +283,8 @@ model Address {
   pincode     String
   latitude    Float?
   longitude   Float?
-  isDefault   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings Booking[]
@@ -305,39 +297,39 @@ model Address {
 // ═══════════════════════════════
 
 model Category {
-  id            String        @id @default(cuid())
-  name          String
-  slug          String        @unique
-  image         String?
-  icon          String?
-  description   String?
-  sortOrder     Int           @default(0)
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  image       String?
+  icon        String?
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
-  // ═══════════════════════════════
-  // NEW: GST Configuration
-  // ═══════════════════════════════
-  // KYA: Category-wise GST control
-  // KYUN: Admin har category ke liye GST enable/disable kar sakta hai
-  //       Aur percentage set kar sakta hai (5%, 12%, 18%, 28%)
-  gstEnabled    Boolean       @default(false)
-  gstPercentage Float         @default(0)
+  gstEnabled    Boolean @default(false)
+  gstPercentage Float   @default(0)
 
-  subCategories SubCategory[]
+  // ═══════════════════════════
+  // NEW: Commission Configuration
+  // ═══════════════════════════
+  commissionType  CommissionType @default(PERCENTAGE)
+  commissionValue Float          @default(20)
+
+  subCategories   SubCategory[]
   staffCategories StaffCategory[]
 }
 
 model SubCategory {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   categoryId  String
   name        String
-  slug        String    @unique
+  slug        String   @unique
   image       String?
   description String?
-  sortOrder   Int       @default(0)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
   category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   services Service[]
@@ -366,14 +358,26 @@ model Service {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  subCategory  SubCategory        @relation(fields: [subCategoryId], references: [id])
-  inclusions   ServiceInclusion[]
-  exclusions   ServiceExclusion[]
-  pricingTiers ServicePricing[]
-  addOns       ServiceAddOn[]
-  bookings     Booking[]
-  reviews      Review[]
-  faqs         ServiceFAQ[]
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Service-level GST & Commission Override (Optional)
+  // ═══════════════════════════════════════════════════════════════
+  // NULL = Use category default
+  // Set = Override category settings
+  gstEnabled      Boolean?
+  gstPercentage   Int?
+  commissionType  CommissionType?
+  commissionValue Float?
+
+  // Relations
+  subCategory     SubCategory @relation(fields: [subCategoryId], references: [id])
+  
+  inclusions       ServiceInclusion[]
+  exclusions       ServiceExclusion[]
+  pricingTiers     ServicePricing[]
+  addOns           ServiceAddOn[]
+  bookings         Booking[]
+  reviews          Review[]
+  faqs             ServiceFAQ[]
   providerServices ProviderService[]
 
   @@index([subCategoryId])
@@ -382,20 +386,21 @@ model Service {
 }
 
 model ServiceInclusion {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   serviceId String
   text      String
-  sortOrder Int     @default(0)
+  sortOrder Int    @default(0)
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   @@unique([serviceId, text])
 }
 
 model ServiceExclusion {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   serviceId String
   text      String
-  sortOrder Int     @default(0)
+  sortOrder Int    @default(0)
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
@@ -428,11 +433,11 @@ model ServiceAddOn {
 }
 
 model ServiceFAQ {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   serviceId String
   question  String
   answer    String
-  sortOrder Int     @default(0)
+  sortOrder Int    @default(0)
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
@@ -444,46 +449,45 @@ model ServiceFAQ {
 // ═══════════════════════════════
 
 model Provider {
-  id              String             @id @default(cuid())
-  userId          String             @unique
+  id              String         @id @default(cuid())
+  userId          String         @unique
   bio             String?
-  experience      Int                @default(0)
+  experience      Int            @default(0)
   aadharNumber    String?
   panNumber       String?
   aadharImage     String?
   panImage        String?
-  policeVerified  Boolean            @default(false)
+  policeVerified  Boolean        @default(false)
   portfolioImages String[]
   bankAccount     String?
   bankIFSC        String?
   bankName        String?
   upiId           String?
-  commissionRate  Float              @default(20)
-  status          ProviderStatus     @default(PENDING)
-  avgRating       Float              @default(0)
-  totalJobs       Int                @default(0)
-  totalEarnings   Float              @default(0)
-  isAvailable     Boolean            @default(false)
+  status          ProviderStatus @default(PENDING)
+  avgRating       Float          @default(0)
+  totalJobs       Int            @default(0)
+  totalEarnings   Float          @default(0) // Legacy display metric, use walletBalance for real money
+  isAvailable     Boolean        @default(false)
   serviceAreas    String[]
-  
-  // ═══════════════════════════════
-  // NEW FIELDS - Real-time Status Tracking
-  // ═══════════════════════════════
-  // KYA: Provider ka current work status aur active job
-  // KYUN: OPS team ko pata chalega ki provider available hai ya busy
-  //       Agar WORKING hai toh warning dikhegi before assigning
-  currentWorkStatus ProviderWorkStatus @default(AVAILABLE)
-  currentJobId      String?            // Currently assigned booking ID
-  
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
 
-  user         User                   @relation(fields: [userId], references: [id])
-  services     ProviderService[]
-  bookings     Booking[]
-  availability ProviderAvailability[]
-  payouts      Payout[]
-  earnings     ProviderEarning[]
+  currentWorkStatus ProviderWorkStatus @default(AVAILABLE)
+  currentJobId      String?
+
+  // ═══════════════════════════════
+  // NEW: Provider Wallet System
+  // ═══════════════════════════════
+  walletBalance Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user               User                        @relation(fields: [userId], references: [id])
+  services           ProviderService[]
+  bookings           Booking[]
+  availability       ProviderAvailability[]
+  payouts            Payout[]
+  earnings           ProviderEarning[]
+  walletTransactions ProviderWalletTransaction[]
 }
 
 model ProviderService {
@@ -505,12 +509,12 @@ model ProviderService {
 }
 
 model ProviderAvailability {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   providerId  String
   dayOfWeek   Int
   startTime   String
   endTime     String
-  isAvailable Boolean  @default(true)
+  isAvailable Boolean @default(true)
 
   provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
@@ -522,36 +526,30 @@ model ProviderAvailability {
 // ═══════════════════════════════
 
 model Booking {
-  id                  String        @id @default(cuid())
-  bookingNumber       String        @unique
-  userId              String
-  providerId          String?
-  serviceId           String
-  addressId           String
-  pricingLabel        String?
-  addOns              Json?
-  scheduledDate       DateTime
-  scheduledTime       String
-  status              BookingStatus @default(PENDING)
-  baseAmount          Float
-  addOnAmount         Float         @default(0)
-  discountAmount      Float         @default(0)
-  couponCode          String?
-  totalAmount         Float
-  paymentStatus       PaymentStatus @default(PENDING)
-  paymentMethod       String?       // "ONLINE" | "COD"
-  razorpayOrderId     String?
-  razorpayPaymentId   String?
+  id                String        @id @default(cuid())
+  bookingNumber     String        @unique
+  userId            String
+  providerId        String?
+  serviceId         String
+  addressId         String
+  pricingLabel      String?
+  addOns            Json?
+  scheduledDate     DateTime
+  scheduledTime     String
+  status            BookingStatus @default(PENDING)
+  baseAmount        Float
+  addOnAmount       Float         @default(0)
+  discountAmount    Float         @default(0)
+  couponCode        String?
+  totalAmount       Float
+  paymentStatus     PaymentStatus @default(PENDING)
+  paymentMethod     String?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
 
-  // ═══════════════════════════════
-  // NEW: POD Payment Link Fields
-  // ═══════════════════════════════
-  // KYA: Razorpay payment link for POD bookings
-  // KYUN: Provider payment link generate karega, customer pay karega
-  razorpayPaymentLinkId   String?
-  razorpayPaymentLinkUrl  String?
+  razorpayPaymentLinkId  String?
+  razorpayPaymentLinkUrl String?
 
-  
   startOTP            String?
   endOTP              String?
   startedAt           DateTime?
@@ -561,67 +559,63 @@ model Booking {
   specialInstructions String?
   beforePhotos        String[]
   afterPhotos         String[]
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // ═══════════════════════════════
-  // NEW: GST Breakdown (for accounting only)
+  // NEW: Complete Financial Breakdown (Model 1: GST Inclusive)
   // ═══════════════════════════════
-  // KYA: GST amount jo totalAmount mein include hai
-  // KYUN: Backend accounting ke liye - customer ko nahi dikhega
-  //       Example: totalAmount=1000, gstAmount=152.54, base=847.46
-  gstAmount           Float         @default(0)
-
-  user          User                   @relation(fields: [userId], references: [id])
-  provider      Provider?              @relation(fields: [providerId], references: [id])
-  service       Service                @relation(fields: [serviceId], references: [id])
-  address       Address                @relation(fields: [addressId], references: [id])
-  review        Review?
-  payment       Payment?
-  statusHistory BookingStatusHistory[]
-  assignmentLogs BookingAssignmentLog[]
+  gstRate            Float @default(0)
+  cgstAmount         Float @default(0)
+  sgstAmount         Float @default(0)
+  companyCommission  Float @default(0)
+  commissionRate     Float @default(0)
+  providerEarningAmt Float @default(0)
 
   // ═══════════════════════════════
-  // NEW FIELDS - COD Payment Tracking
+  // COD/POD Physical Cash Tracking (Tested & Kept)
   // ═══════════════════════════════
-  codAmountCollected  Float?      // Provider ne kitna collect kiya
-  codVerifiedBy       String?     // OPS ne verify kiya (user ID)
-  codVerifiedAt       DateTime?   // Verification timestamp
-  codDisputed         Boolean     @default(false)  // Amount disputed hai ya nahi
-  
-  // ═══════════════════════════════
-  // NEW RELATION - Reschedule Requests
-  // ═══════════════════════════════
+  codAmountCollected Float?
+  codVerifiedBy      String?
+  codVerifiedAt      DateTime?
+  codDisputed        Boolean   @default(false)
+
+  user               User                   @relation(fields: [userId], references: [id])
+  provider           Provider?              @relation(fields: [providerId], references: [id])
+  service            Service                @relation(fields: [serviceId], references: [id])
+  address            Address                @relation(fields: [addressId], references: [id])
+  review             Review?
+  payment            Payment?
+  statusHistory      BookingStatusHistory[]
+  assignmentLogs     BookingAssignmentLog[]
   rescheduleRequests RescheduleRequest[]
+
+  // NEW RELATION
+  providerEarningRecord ProviderEarning?
+  providerWalletTxns    ProviderWalletTransaction[] // ✅ YE LINE ADD KAREIN
 
   @@index([userId])
   @@index([providerId])
   @@index([status])
 }
 
-// ═══════════════════════════════
-// RESCHEDULE REQUEST MODEL - OTP CONFIRMATION
-// ═══════════════════════════════
-// KYA: OPS ya customer ne reschedule request ki hai, OTP se confirm hoga
-// KYUN: Security - customer ki permission ke bina booking reschedule nahi hogi
-//       OTP valid for 10 minutes, max 3 attempts
 model RescheduleRequest {
-  id              String           @id @default(cuid())
-  bookingId       String
-  originalSlot    DateTime         // Purana scheduled time
-  proposedSlot    DateTime         // Naya proposed time
-  reason          String?          // Why rescheduling
-  
-  otp             String           // 4-digit OTP
-  otpExpiresAt    DateTime         // OTP expiry (10 mins)
-  otpAttempts     Int              @default(0) // Track failed attempts
-  
-  status          RescheduleStatus @default(PENDING)
-  requestedBy     String           // "OPS" | "CUSTOMER" | "PROVIDER"
-  
-  confirmedAt     DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id           String   @id @default(cuid())
+  bookingId    String
+  originalSlot DateTime
+  proposedSlot DateTime
+  reason       String?
+
+  otp          String
+  otpExpiresAt DateTime
+  otpAttempts  Int      @default(0)
+
+  status      RescheduleStatus @default(PENDING)
+  requestedBy String
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
@@ -666,7 +660,7 @@ model Payment {
 }
 
 // ═══════════════════════════════
-// WALLET MODEL
+// CUSTOMER WALLET MODEL
 // ═══════════════════════════════
 
 model WalletTransaction {
@@ -737,37 +731,31 @@ model Coupon {
 }
 
 // ═══════════════════════════════
-// PROVIDER EARNINGS
+// PROVIDER FINANCIALS (EARNINGS & PAYOUTS)
 // ═══════════════════════════════
 
 model ProviderEarning {
-  id              String        @id @default(cuid())
-  providerId      String
-  bookingId       String
-  gross           Float
-  commission      Float
-  net             Float
-  status          EarningStatus @default(PENDING)
-  
-  // ═══════════════════════════════
-  // NEW: Payment Method Tracking
-  // ═══════════════════════════════
-  // KYA: Booking ka payment method (ONLINE/POD)
-  // KYUN: POD earnings alag track karne ke liye
-  paymentMethod   String        @default("ONLINE") // "ONLINE" | "POD"
-  
-  // ═══════════════════════════════
-  // NEW: Settlement Tracking
-  // ═══════════════════════════════
-  // KYA: POD payment ka settlement status
-  // KYUN: Provider ne customer se cash collect kiya ya nahi
-  collectedAmount Float?        // Provider ne kitna collect kiya
-  collectedAt     DateTime?     // Collection timestamp
-  settledAt       DateTime?     // Settlement timestamp
-  
-  createdAt       DateTime      @default(now())
+  id            String        @id @default(cuid())
+  providerId    String
+  bookingId     String        @unique // FIXED: One earning record per booking
+  gross         Float // Now stores Base Amount (GST exclusive)
+  commission    Float // Company's commission
+  net           Float // Provider's earning (gross - commission)
+  status        EarningStatus @default(PENDING)
+  paymentMethod String        @default("ONLINE")
 
-  provider Provider @relation(fields: [providerId], references: [id])
+  collectedAmount Float?
+  collectedAt     DateTime?
+  settledAt       DateTime?
+
+  // NEW: Link to wallet transaction
+  walletTxnId String?
+
+  createdAt DateTime @default(now())
+
+  provider  Provider                   @relation(fields: [providerId], references: [id])
+  booking   Booking                    @relation(fields: [bookingId], references: [id])
+  walletTxn ProviderWalletTransaction? @relation(fields: [walletTxnId], references: [id])
 
   @@index([providerId])
   @@index([status])
@@ -778,24 +766,74 @@ model Payout {
   id              String       @id @default(cuid())
   providerId      String
   amount          Float
-  method          String       // "BANK_TRANSFER" | "UPI" | "CASH"
+  method          String // "BANK_TRANSFER" | "UPI" | "CASH"
   status          PayoutStatus @default(PENDING)
-  reference       String?      // Transaction ID / UTR
+  reference       String?
   processedAt     DateTime?
-  processedBy     String?      // OPS user ID who processed
-  
-  // ═══════════════════════════════
-  // NEW: Payout Details
-  // ═══════════════════════════════
-  notes           String?      // OPS notes
-  rejectionReason String?      // If rejected
-  
-  createdAt       DateTime     @default(now())
+  processedBy     String?
+  notes           String?
+  rejectionReason String? // NEW
+
+  // NEW: Bank/UPI details snapshot
+  bankAccount String?
+  bankIFSC    String?
+  bankName    String?
+  upiId       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // NEW
 
   provider Provider @relation(fields: [providerId], references: [id])
 
+  // NEW RELATION
+  walletTransactions ProviderWalletTransaction[]
+
   @@index([providerId])
   @@index([status])
+}
+
+// ═══════════════════════════════
+// NEW: PROVIDER WALLET TRANSACTION
+// ═══════════════════════════════
+model ProviderWalletTransaction {
+  id           String                @id @default(cuid())
+  providerId   String
+  type         ProviderWalletTxnType
+  amount       Float // +ve for credit, -ve for debit
+  balanceAfter Float // Wallet balance after this txn
+  description  String
+  bookingId    String?
+  payoutId     String?
+  referenceId  String?
+  createdBy    String?
+  createdAt    DateTime              @default(now())
+
+  provider         Provider          @relation(fields: [providerId], references: [id])
+  booking          Booking?          @relation(fields: [bookingId], references: [id])
+  payout           Payout?           @relation(fields: [payoutId], references: [id])
+  providerEarnings ProviderEarning[] // ✅ YE LINE ADD KAREIN
+
+  @@index([providerId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════
+// NEW: COMPANY LEDGER
+// ═══════════════════════════════
+model CompanyLedger {
+  id          String            @id @default(cuid())
+  type        CompanyLedgerType
+  amount      Float
+  description String
+  bookingId   String?
+  payoutId    String?
+  referenceId String?
+  createdAt   DateTime          @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([bookingId])
 }
 
 // ═══════════════════════════════
@@ -928,13 +966,13 @@ model CSPDCLCallLog {
 // ═══════════════════════════════
 
 model SubscriptionPlan {
-  id            String   @id @default(cuid())
-  name          String
-  price         Float
-  duration      Int
-  discount      Float
-  features      String[]
-  isActive      Boolean  @default(true)
+  id       String   @id @default(cuid())
+  name     String
+  price    Float
+  duration Int
+  discount Float
+  features String[]
+  isActive Boolean  @default(true)
 
   subscriptions UserSubscription[]
 }
@@ -978,10 +1016,6 @@ model AppSetting {
   description String?
   updatedAt   DateTime @updatedAt
 }
-
-// ═══════════════════════════════
-// GLOBAL FAQ MODEL
-// ═══════════════════════════════
 
 model FAQ {
   id        String   @id @default(cuid())
@@ -1039,7 +1073,7 @@ model BookingAssignmentLog {
   createdAt DateTime @default(now())
 
   booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  assignedBy User   @relation("AssignmentLogs", fields: [actionBy], references: [id])
+  assignedBy User    @relation("AssignmentLogs", fields: [actionBy], references: [id])
 
   @@index([bookingId])
   @@index([actionBy])

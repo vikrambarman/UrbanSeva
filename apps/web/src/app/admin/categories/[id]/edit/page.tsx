@@ -1,8 +1,7 @@
-// apps/web/src/app/admin/categories/[id]/edit/page.tsx
 /**
  * WHAT: Admin Category Edit Page
- * WHY: Admin can edit category details including GST settings
- * NOTE: Full edit access for admin, GST-only for OPS
+ * WHY: Admin can edit category details including GST + Commission settings
+ * NOTE: Full edit access for admin - GST & Commission configuration
  */
 
 'use client'
@@ -16,13 +15,16 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { 
-  ArrowLeft, 
-  Loader2, 
-  Save, 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  ArrowLeft,
+  Loader2,
+  Save,
   FolderOpen,
   Tag,
-  AlertCircle
+  Percent,
+  AlertCircle,
+  IndianRupee,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/authStore'
@@ -38,6 +40,8 @@ interface Category {
   isActive: boolean
   gstEnabled: boolean
   gstPercentage: number
+  commissionType: string
+  commissionValue: number
   sortOrder: number
 }
 
@@ -45,7 +49,7 @@ export default function EditCategoryPage() {
   const router = useRouter()
   const params = useParams()
   const { token } = useAuthStore()
-  
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [category, setCategory] = useState<Category | null>(null)
@@ -59,6 +63,8 @@ export default function EditCategoryPage() {
     isActive: true,
     gstEnabled: false,
     gstPercentage: 18,
+    commissionType: 'PERCENTAGE',
+    commissionValue: 20,
     sortOrder: 0
   })
 
@@ -72,6 +78,7 @@ export default function EditCategoryPage() {
     try {
       const response = await fetch(`/api/admin/categories/${params.id}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       })
 
       const data = await response.json()
@@ -87,6 +94,8 @@ export default function EditCategoryPage() {
           isActive: data.data.isActive ?? true,
           gstEnabled: data.data.gstEnabled ?? false,
           gstPercentage: data.data.gstPercentage ?? 18,
+          commissionType: data.data.commissionType ?? 'PERCENTAGE',
+          commissionValue: data.data.commissionValue ?? 20,
           sortOrder: data.data.sortOrder ?? 0
         })
       } else {
@@ -134,6 +143,16 @@ export default function EditCategoryPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // NEW: Live commission preview calculation
+  // ═══════════════════════════════════════════════════════════════
+  const getCommissionPreview = () => {
+    if (formData.commissionType === 'FIXED') {
+      return `₹${formData.commissionValue} fixed per booking`
+    }
+    return `${formData.commissionValue}% of base amount (after GST removal)`
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -161,7 +180,7 @@ export default function EditCategoryPage() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Edit Category</h1>
-          <p className="text-muted-foreground">Update category details and GST settings</p>
+          <p className="text-muted-foreground">Update category details, GST & commission settings</p>
         </div>
       </div>
 
@@ -170,10 +189,12 @@ export default function EditCategoryPage() {
         <CardContent className="flex items-start gap-3 p-4">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800">
-            <p className="font-semibold mb-1">GST Configuration</p>
+            <p className="font-semibold mb-1">GST & Commission Configuration</p>
+            <p className="mb-2">
+              These settings will apply to all services in this category <strong>that use category defaults</strong>.
+            </p>
             <p>
-              Enable GST for categories where tax is applicable. 
-              Customer will see inclusive pricing (no extra GST added at checkout).
+              Individual services can override these settings. Services with custom settings will not be affected by changes here.
             </p>
           </div>
         </CardContent>
@@ -267,20 +288,22 @@ export default function EditCategoryPage() {
             </div>
           </div>
 
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* GST Settings Section */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
           <div className="border-t pt-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Tag className="w-5 h-5 text-primary" />
+              <Tag className="w-5 h-5 text-blue-600" />
               GST Settings
             </h3>
 
-            {/* GST Toggle */}
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div className="flex items-center gap-3">
                 <Tag className="w-5 h-5 text-muted-foreground" />
                 <div>
                   <p className="font-medium">Enable GST</p>
                   <p className="text-sm text-muted-foreground">
-                    Apply GST to all services in this category
+                    Apply GST to all services in this category (inclusive pricing)
                   </p>
                 </div>
               </div>
@@ -290,9 +313,8 @@ export default function EditCategoryPage() {
               />
             </div>
 
-            {/* GST Percentage */}
             {formData.gstEnabled && (
-              <div className="mt-4 p-4 border rounded-lg bg-primary/5">
+              <div className="mt-4 p-4 border rounded-lg bg-blue-50/50">
                 <Label htmlFor="gstPercentage">GST Rate (%)</Label>
                 <select
                   id="gstPercentage"
@@ -306,22 +328,108 @@ export default function EditCategoryPage() {
                   <option value={28}>28%</option>
                 </select>
                 <p className="text-xs text-muted-foreground mt-2">
-                  This rate will be applied to all services under this category
+                  Split as CGST {formData.gstPercentage / 2}% + SGST {formData.gstPercentage / 2}% (Intra-state)
                 </p>
               </div>
             )}
           </div>
 
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* NEW: Commission Settings Section */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Percent className="w-5 h-5 text-orange-600" />
+              Commission Settings (Company Cut)
+            </h3>
+
+            <div className="p-4 border rounded-lg bg-orange-50/50 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This is the amount company keeps from each booking. Rest goes to the service provider.
+                Commission is calculated on the <strong>base amount</strong> (after GST removal).
+              </p>
+
+              {/* Commission Type */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Commission Type</Label>
+                  <Select 
+                    value={formData.commissionType} 
+                    onValueChange={(val) => setFormData({ ...formData, commissionType: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PERCENTAGE">
+                        Percentage (%) — of base amount
+                      </SelectItem>
+                      <SelectItem value="FIXED">
+                        Fixed (₹) — flat amount per booking
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    {formData.commissionType === 'PERCENTAGE' 
+                      ? 'Commission Rate (%)' 
+                      : 'Fixed Commission Amount (₹)'
+                    }
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={formData.commissionValue}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        commissionValue: Math.max(0, Number(e.target.value)) 
+                      })}
+                      min="0"
+                      step={formData.commissionType === 'FIXED' ? '1' : '0.5'}
+                      className="flex-1"
+                    />
+                    <span className="text-lg font-semibold text-muted-foreground min-w-[24px]">
+                      {formData.commissionType === 'FIXED' ? '₹' : '%'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Commission Preview */}
+              <div className="p-3 bg-orange-100/50 border border-orange-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <IndianRupee className="w-4 h-4 text-orange-700" />
+                  <p className="text-sm font-medium text-orange-800">
+                    Preview: Company earns <strong>{getCommissionPreview()}</strong>
+                  </p>
+                </div>
+                <p className="text-xs text-orange-700 mt-1 ml-6">
+                  Example: If base amount is ₹1000, company gets ₹{
+                    formData.commissionType === 'FIXED' 
+                      ? formData.commissionValue 
+                      : Math.round(1000 * formData.commissionValue / 100)
+                  }, provider gets ₹{
+                    formData.commissionType === 'FIXED'
+                      ? 1000 - formData.commissionValue
+                      : Math.round(1000 - (1000 * formData.commissionValue / 100))
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Save Button */}
           <div className="flex gap-3 justify-end pt-4 border-t">
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => router.back()}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSave}
               disabled={saving}
             >

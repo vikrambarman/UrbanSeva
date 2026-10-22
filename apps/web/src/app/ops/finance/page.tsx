@@ -1,8 +1,6 @@
-// apps/web/src/app/ops/finance/page.tsx
 /**
- * WHAT: OPS Financial Dashboard
- * WHY: OPS team ko financial overview mile - revenue, payouts, POD settlements
- * NOTE: Admin bhi dekh sakta hai, but OPS primary user hai
+ * WHAT: OPS Financial Dashboard with GST Tracking
+ * WHY: OPS team ko financial overview + GST report mile
  */
 
 "use client"
@@ -13,10 +11,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { 
     IndianRupee, TrendingUp, Wallet, ArrowRight, 
     Clock, CheckCircle2, AlertCircle, Banknote,
-    CreditCard, Zap, DollarSign, PieChart
+    CreditCard, Zap, DollarSign, PieChart,
+    FileText, Download, Receipt
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-client"
 import { toast } from "sonner"
@@ -27,17 +28,36 @@ interface FinanceStats {
     weekRevenue: number
     monthRevenue: number
     totalRevenue: number
-    
     onlineRevenue: number
     podRevenue: number
     podPending: number
-    
     totalCommission: number
     totalPayouts: number
     pendingPayouts: number
-    
     todayBookings: number
     completedBookings: number
+}
+
+interface GSTSummary {
+    totalRevenue: number
+    totalBaseAmount: number
+    totalGST: number
+    totalCGST: number
+    totalSGST: number
+    totalCommission: number
+    totalProviderEarning: number
+    totalBookings: number
+}
+
+interface CategoryGST {
+    categoryId: string
+    categoryName: string
+    totalBase: number
+    totalGST: number
+    totalCGST: number
+    totalSGST: number
+    commission: number
+    bookingCount: number
 }
 
 interface PendingPOD {
@@ -69,9 +89,20 @@ export default function OpsFinancePage() {
     const [recentPayouts, setRecentPayouts] = useState<RecentPayout[]>([])
     const [loading, setLoading] = useState(true)
 
+    // GST State
+    const [gstSummary, setGstSummary] = useState<GSTSummary | null>(null)
+    const [categoryGST, setCategoryGST] = useState<CategoryGST[]>([])
+    const [gstPeriod, setGstPeriod] = useState('month')
+    const [gstLoading, setGstLoading] = useState(false)
+
     useEffect(() => {
         fetchFinanceData()
+        fetchGSTReport()
     }, [])
+
+    useEffect(() => {
+        fetchGSTReport()
+    }, [gstPeriod])
 
     const fetchFinanceData = async () => {
         try {
@@ -88,6 +119,65 @@ export default function OpsFinancePage() {
         } finally {
             setLoading(false)
         }
+    }
+
+    const fetchGSTReport = async () => {
+        setGstLoading(true)
+        try {
+            const res = await apiFetch(`/api/ops/gst/report?period=${gstPeriod}`, { cache: 'no-store' })
+            const data = await res.json()
+            if (data.success) {
+                setGstSummary(data.data.summary)
+                setCategoryGST(data.data.categoryBreakdown)
+            }
+        } catch (error) {
+            console.error('GST fetch error:', error)
+        } finally {
+            setGstLoading(false)
+        }
+    }
+
+    const exportGSTCSV = () => {
+        if (!gstSummary || categoryGST.length === 0) {
+            toast.error('No data to export')
+            return
+        }
+
+        const headers = ['Category', 'Bookings', 'Base Amount', 'CGST', 'SGST', 'Total GST', 'Commission']
+        const rows = categoryGST.map(cat => [
+            cat.categoryName,
+            cat.bookingCount,
+            cat.totalBase,
+            cat.totalCGST,
+            cat.totalSGST,
+            cat.totalGST,
+            cat.commission
+        ])
+
+        // Summary row
+        rows.push([
+            'TOTAL',
+            gstSummary.totalBookings,
+            gstSummary.totalBaseAmount,
+            gstSummary.totalCGST,
+            gstSummary.totalSGST,
+            gstSummary.totalGST,
+            gstSummary.totalCommission
+        ])
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.join(','))
+        ].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `GST_Report_${gstPeriod}_${new Date().toISOString().split('T')[0]}.csv`
+        a.click()
+        window.URL.revokeObjectURL(url)
+        toast.success('GST Report exported!')
     }
 
     if (loading) {
@@ -113,7 +203,7 @@ export default function OpsFinancePage() {
                         Financial Dashboard
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Revenue, payouts, and settlement overview
+                        Revenue, payouts, GST, and settlement overview
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -208,6 +298,135 @@ export default function OpsFinancePage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* GST SECTION - NEW */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <Card className="border-primary/20 bg-gradient-to-br from-orange-50 to-amber-50">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Receipt className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">GST Collection Report</CardTitle>
+                                <p className="text-sm text-muted-foreground">
+                                    Intra-state (CGST + SGST) • Ambikapur, Chhattisgarh
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Select value={gstPeriod} onValueChange={setGstPeriod}>
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="today">Today</SelectItem>
+                                    <SelectItem value="week">This Week</SelectItem>
+                                    <SelectItem value="month">This Month</SelectItem>
+                                    <SelectItem value="quarter">This Quarter</SelectItem>
+                                    <SelectItem value="year">This Year</SelectItem>
+                                    <SelectItem value="all">All Time</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Button variant="outline" size="sm" onClick={exportGSTCSV} disabled={gstLoading}>
+                                <Download className="h-4 w-4 mr-1" />
+                                Export CSV
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {gstLoading ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[...Array(4)].map((_, i) => (
+                                <Skeleton key={i} className="h-20 rounded-lg" />
+                            ))}
+                        </div>
+                    ) : gstSummary ? (
+                        <>
+                            {/* GST Summary Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="p-4 bg-white rounded-lg border">
+                                    <p className="text-xs text-muted-foreground font-medium">Total GST Collected</p>
+                                    <p className="text-2xl font-bold text-primary mt-1">
+                                        ₹{gstSummary.totalGST.toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        On {gstSummary.totalBookings} bookings
+                                    </p>
+                                </div>
+                                <div className="p-4 bg-white rounded-lg border">
+                                    <p className="text-xs text-muted-foreground font-medium">CGST (9%)</p>
+                                    <p className="text-2xl font-bold text-blue-600 mt-1">
+                                        ₹{gstSummary.totalCGST.toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">Central Govt</p>
+                                </div>
+                                <div className="p-4 bg-white rounded-lg border">
+                                    <p className="text-xs text-muted-foreground font-medium">SGST (9%)</p>
+                                    <p className="text-2xl font-bold text-green-600 mt-1">
+                                        ₹{gstSummary.totalSGST.toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">State Govt (CG)</p>
+                                </div>
+                                <div className="p-4 bg-white rounded-lg border">
+                                    <p className="text-xs text-muted-foreground font-medium">Base Amount</p>
+                                    <p className="text-2xl font-bold mt-1">
+                                        ₹{gstSummary.totalBaseAmount.toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">Before GST</p>
+                                </div>
+                            </div>
+
+                            {/* Category-wise GST Table */}
+                            {categoryGST.length > 0 && (
+                                <div className="border rounded-lg overflow-hidden">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50">
+                                                <TableHead>Category</TableHead>
+                                                <TableHead className="text-right">Bookings</TableHead>
+                                                <TableHead className="text-right">Base Amount</TableHead>
+                                                <TableHead className="text-right">CGST</TableHead>
+                                                <TableHead className="text-right">SGST</TableHead>
+                                                <TableHead className="text-right">Total GST</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {categoryGST.map((cat) => (
+                                                <TableRow key={cat.categoryId}>
+                                                    <TableCell className="font-medium">{cat.categoryName}</TableCell>
+                                                    <TableCell className="text-right">{cat.bookingCount}</TableCell>
+                                                    <TableCell className="text-right">₹{cat.totalBase.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right text-blue-600">₹{cat.totalCGST.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right text-green-600">₹{cat.totalSGST.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right font-semibold">₹{cat.totalGST.toLocaleString()}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {/* Total Row */}
+                                            <TableRow className="bg-primary/5 font-bold">
+                                                <TableCell>TOTAL</TableCell>
+                                                <TableCell className="text-right">{gstSummary.totalBookings}</TableCell>
+                                                <TableCell className="text-right">₹{gstSummary.totalBaseAmount.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right text-blue-600">₹{gstSummary.totalCGST.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right text-green-600">₹{gstSummary.totalSGST.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right text-primary">₹{gstSummary.totalGST.toLocaleString()}</TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="text-center py-8">
+                            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                            <p className="text-muted-foreground">No GST data available for this period</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Commission & Payouts */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

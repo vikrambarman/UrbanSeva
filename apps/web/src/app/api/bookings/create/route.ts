@@ -5,7 +5,9 @@
  * - Initial status: PAYMENT_RECEIVED (OPS verification pending)
  * - Support both ONLINE and POD payment methods
  * - GST calculation based on category settings (inclusive pricing)
- * - Send notification to customer after booking creation
+ * - NEW: Commission calculation based on category settings
+ * - NEW: Save complete financial breakdown in Booking model
+ * - HYBRID: Service-level overrides take precedence over Category defaults
  * NOTE: Backward compatible - old code will still work
  */
 
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
         }
 
         // ═══════════════════════════════
-        // GST Calculation (Inclusive Pricing)
+        // FETCH SERVICE & CATEGORY (For GST & Commission)
         // ═══════════════════════════════
         const service = await db.service.findUnique({
             where: { id: serviceId },
@@ -107,25 +109,48 @@ export async function POST(request: Request) {
         }
 
         const category = service.subCategory.category
-        const gstRate = category.gstEnabled ? category.gstPercentage / 100 : 0
 
-        // totalAmount is inclusive of GST
+        // ═══════════════════════════════
+        // FINANCIAL CALCULATIONS (Model 1: GST Inclusive)
+        // HYBRID APPROACH: Service Override > Category Default
+        // ═══════════════════════════════
+        
+        // 1. Total Amount (What customer pays)
         const finalTotalAmount = totalAmount || (baseAmount + (addOnAmount || 0))
-        const calculatedBaseAmount = gstRate > 0
-            ? finalTotalAmount / (1 + gstRate)
+        
+        // 2. GST Breakdown (Service level overrides category level)
+        const isGstEnabled = service.gstEnabled ?? category.gstEnabled
+        const gstPercentage = service.gstPercentage ?? category.gstPercentage
+        const gstRate = isGstEnabled ? (gstPercentage || 0) : 0 // e.g., 18
+        
+        const calculatedBaseAmount = gstRate > 0 
+            ? finalTotalAmount / (1 + gstRate / 100) 
             : finalTotalAmount
         const calculatedGstAmount = finalTotalAmount - calculatedBaseAmount
+        const cgstAmount = gstRate > 0 ? calculatedBaseAmount * (gstRate / 2 / 100) : 0 // 9%
+        const sgstAmount = gstRate > 0 ? calculatedBaseAmount * (gstRate / 2 / 100) : 0 // 9%
+
+        // 3. Commission Breakdown (Service level overrides category level)
+        const commissionType = service.commissionType ?? category.commissionType // 'PERCENTAGE' or 'FIXED'
+        const commissionValue = service.commissionValue ?? category.commissionValue // e.g., 20 or 50
+        
+        let companyCommission = 0
+        if (commissionType === 'FIXED') {
+            companyCommission = commissionValue || 0
+        } else {
+            companyCommission = calculatedBaseAmount * ((commissionValue || 0) / 100)
+        }
+        
+        const providerEarningAmt = calculatedBaseAmount - companyCommission
 
         // Generate booking number
         const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`
 
         const isPOD = paymentMethod === 'POD' || paymentMethod === 'COD'
-        // Dono cases mein status PENDING rahega. 
-        // ONLINE ke liye verify API mein update hoga, POD ke liye OPS confirm karegi.
         const initialStatus = 'PENDING'
-        const initialPaymentStatus = 'PENDING' // Hamesha PENDING se start hoga
+        const initialPaymentStatus = 'PENDING' 
 
-        // Create booking with all fields
+        // Create booking with ALL financial fields
         const booking = await db.booking.create({
             data: {
                 bookingNumber,
@@ -141,11 +166,20 @@ export async function POST(request: Request) {
                 discountAmount: discountAmount || 0,
                 couponCode: couponCode || null,
                 totalAmount: finalTotalAmount,
-                gstAmount: calculatedGstAmount,
                 specialInstructions,
                 paymentMethod: paymentMethod || 'ONLINE',
                 status: initialStatus,
                 paymentStatus: initialPaymentStatus,
+                
+                // ═══════════════════════════════
+                // NEW: Save Financial Breakdown
+                // ═══════════════════════════════
+                gstRate: gstRate,
+                cgstAmount: cgstAmount,
+                sgstAmount: sgstAmount,
+                companyCommission: companyCommission,
+                commissionRate: commissionValue || 0,
+                providerEarningAmt: providerEarningAmt,
             },
             include: {
                 service: true,

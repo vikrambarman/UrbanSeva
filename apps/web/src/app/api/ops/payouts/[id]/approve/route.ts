@@ -1,43 +1,37 @@
-/**
- * WHAT: OPS approves payout request
- * WHY: 
- * - OPS verifies payout request
- * - Marks as COMPLETED after payment
- * - Updates earning status to PAID
- * NOTE: OPS can add transaction reference (UTR/Transaction ID)
- */
-
+// OPS - Approve or Reject Payout
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCallingTeamUser } from '@/lib/auth'
-import { sendNotification } from '@/lib/notifications'
+import { getAdminUser } from '@/lib/auth'
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: { id: string } }
 ) {
     try {
-        const user = await getCallingTeamUser(request)
-        if (!user) {
+        const admin = await getAdminUser(request)
+        if (!admin) {
             return NextResponse.json(
                 { success: false, error: 'Unauthorized' },
                 { status: 401 }
             )
         }
 
-        const { id: payoutId } = await params
+        const { id } = params
         const body = await request.json()
-        const { action, transactionReference, notes } = body // action: 'approve' | 'reject'
+        const { action, rejectionReason, transactionId } = body // action: 'APPROVE' or 'REJECT'
 
-        // Find payout
+        if (!action || !['APPROVE', 'REJECT'].includes(action)) {
+            return NextResponse.json(
+                { success: false, error: 'Invalid action' },
+                { status: 400 }
+            )
+        }
+
+        // Get payout
         const payout = await db.payout.findUnique({
-            where: { id: payoutId },
+            where: { id },
             include: {
-                provider: {
-                    include: {
-                        user: { select: { id: true, name: true, phone: true } }
-                    }
-                }
+                provider: true
             }
         })
 
@@ -55,91 +49,84 @@ export async function POST(
             )
         }
 
-        if (action === 'approve') {
-            // Update payout
+        if (action === 'APPROVE') {
+            // Update payout status
             await db.payout.update({
-                where: { id: payoutId },
+                where: { id },
                 data: {
                     status: 'COMPLETED',
+                    processedBy: admin.userId,
                     processedAt: new Date(),
-                    reference: transactionReference || payout.reference,
+                    transactionId: transactionId || null
                 }
             })
 
-            // Update earnings to PAID
-            await db.providerEarning.updateMany({
-                where: { 
+            // Create wallet transaction for payout completion
+            await db.providerWalletTransaction.create({
+                data: {
                     providerId: payout.providerId,
-                    status: 'PAYOUT_INITIATED'
-                },
-                data: { status: 'PAID' }
+                    type: 'PAYOUT_COMPLETED',
+                    amount: payout.amount,
+                    description: `Payout #${payout.id} completed via ${payout.method}`,
+                    referenceId: payout.id,
+                    balanceAfter: payout.provider.walletBalance
+                }
             })
-
-            // Notify provider
-            try {
-                await sendNotification({
-                    userId: payout.provider.userId,
-                    title: 'Payout Completed',
-                    body: `Your payout of ₹${payout.amount} has been processed. Reference: ${transactionReference || 'N/A'}`,
-                    type: 'GENERAL',
-                    referenceId: payoutId,
-                })
-            } catch (notifError) {
-                console.error('Notification error:', notifError)
-            }
 
             return NextResponse.json({
                 success: true,
                 message: 'Payout approved successfully'
             })
 
-        } else if (action === 'reject') {
-            // Update payout
+        } else {
+            // REJECT - Return amount to wallet
             await db.payout.update({
-                where: { id: payoutId },
+                where: { id },
                 data: {
-                    status: 'FAILED',
+                    status: 'REJECTED',
+                    processedBy: admin.userId,
+                    processedAt: new Date(),
+                    rejectionReason: rejectionReason || null
                 }
             })
 
-            // Revert earnings to SETTLED
-            await db.providerEarning.updateMany({
-                where: { 
-                    providerId: payout.providerId,
-                    status: 'PAYOUT_INITIATED'
-                },
-                data: { status: 'SETTLED' }
+            // Return amount to wallet
+            await db.provider.update({
+                where: { id: payout.providerId },
+                data: {
+                    walletBalance: {
+                        increment: payout.amount
+                    }
+                }
             })
 
-            // Notify provider
-            try {
-                await sendNotification({
-                    userId: payout.provider.userId,
-                    title: 'Payout Request Rejected',
-                    body: `Your payout request of ₹${payout.amount} has been rejected. ${notes || ''}`,
-                    type: 'GENERAL',
-                    referenceId: payoutId,
-                })
-            } catch (notifError) {
-                console.error('Notification error:', notifError)
-            }
+            // Create wallet transaction for refund
+            const updatedProvider = await db.provider.findUnique({
+                where: { id: payout.providerId },
+                select: { walletBalance: true }
+            })
+
+            await db.providerWalletTransaction.create({
+                data: {
+                    providerId: payout.providerId,
+                    type: 'PAYOUT_REFUND',
+                    amount: payout.amount,
+                    description: `Payout #${payout.id} rejected - Amount refunded`,
+                    referenceId: payout.id,
+                    balanceAfter: updatedProvider?.walletBalance || 0
+                }
+            })
 
             return NextResponse.json({
                 success: true,
-                message: 'Payout rejected'
+                message: 'Payout rejected, amount refunded to wallet'
             })
-
-        } else {
-            return NextResponse.json(
-                { success: false, error: 'Invalid action' },
-                { status: 400 }
-            )
         }
 
     } catch (error) {
-        console.error('❌ Payout approval error:', error)
+        console.error('Payout Approval Error:', error)
         return NextResponse.json(
-            { success: false, error: 'Internal server error' },
+            { success: false, error: 'Failed to process payout' },
             { status: 500 }
         )
     }
