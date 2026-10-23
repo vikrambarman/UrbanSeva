@@ -63,8 +63,9 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { amount, method, bankDetails, upiId, notes } = body
+        const { amount, method } = body
 
+        // ✅ Validation
         if (!amount || amount <= 0) {
             return NextResponse.json({ success: false, error: 'Invalid amount' }, { status: 400 })
         }
@@ -73,9 +74,17 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Invalid payout method' }, { status: 400 })
         }
 
+        // ✅ Fetch provider with bank details
         const providerData = await db.provider.findUnique({
             where: { userId: provider.userId },
-            select: { id: true, walletBalance: true }
+            select: { 
+                id: true, 
+                walletBalance: true,
+                bankAccount: true,
+                bankIFSC: true,
+                bankName: true,
+                upiId: true
+            }
         })
 
         if (!providerData) {
@@ -84,6 +93,23 @@ export async function POST(request: NextRequest) {
 
         if (providerData.walletBalance < amount) {
             return NextResponse.json({ success: false, error: 'Insufficient wallet balance' }, { status: 400 })
+        }
+
+        // ✅ Method-wise validation using saved details
+        if (method === 'BANK_TRANSFER') {
+            if (!providerData.bankAccount || !providerData.bankIFSC || !providerData.bankName) {
+                return NextResponse.json({ 
+                    success: false, 
+                    error: 'Please update your bank details in profile first' 
+                }, { status: 400 })
+            }
+        }
+
+        if (method === 'UPI' && !providerData.upiId) {
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Please update your UPI ID in profile first' 
+            }, { status: 400 })
         }
 
         // Check for any pending payout request
@@ -97,14 +123,16 @@ export async function POST(request: NextRequest) {
 
         // Create payout request & deduct from wallet in a transaction
         const payout = await db.$transaction(async (tx) => {
+            // ✅ Use correct field names from schema
             const newPayout = await tx.payout.create({
                 data: {
                     providerId: providerData.id,
                     amount,
                     method,
-                    bankDetails: bankDetails || null,
-                    upiId: upiId || null,
-                    notes: notes || null,
+                    bankAccount: method === 'BANK_TRANSFER' ? providerData.bankAccount : null,
+                    bankIFSC: method === 'BANK_TRANSFER' ? providerData.bankIFSC : null,
+                    bankName: method === 'BANK_TRANSFER' ? providerData.bankName : null,
+                    upiId: method === 'UPI' ? providerData.upiId : null,
                     status: 'PENDING'
                 }
             })
@@ -130,6 +158,15 @@ export async function POST(request: NextRequest) {
                     referenceId: newPayout.id,
                     balanceAfter: updatedProvider?.walletBalance || 0
                 }
+            })
+
+            // Mark related pending earnings as PAYOUT_INITIATED
+            await tx.providerEarning.updateMany({
+                where: { 
+                    providerId: providerData.id, 
+                    status: 'PENDING' 
+                },
+                data: { status: 'PAYOUT_INITIATED' }
             })
 
             return newPayout

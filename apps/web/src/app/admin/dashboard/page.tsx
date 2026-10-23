@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Users, Briefcase, Calendar, IndianRupee, TrendingUp, ArrowRight } from "lucide-react"
+import { Users, Briefcase, Calendar, IndianRupee, TrendingUp, TrendingDown, Wallet, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { apiFetch } from "@/lib/api-client"
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<any>(null)
+    const [financeStats, setFinanceStats] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -21,7 +22,6 @@ export default function AdminDashboardPage() {
                 
                 const res = await apiFetch('/api/admin/dashboard')
                 
-                // ✅ FIX: Check if response is valid
                 if (!res || !res.ok) {
                     console.error('❌ Invalid response:', res)
                     toast.error("Failed to load dashboard - Invalid response")
@@ -45,7 +45,19 @@ export default function AdminDashboardPage() {
                 setLoading(false)
             }
         }
+
+        const fetchFinanceStats = async () => {
+            try {
+                const res = await apiFetch('/api/admin/finance/stats?period=month', { cache: 'no-store' })
+                const data = await res.json()
+                if (data.success) setFinanceStats(data.data)
+            } catch (error) {
+                console.error('Finance stats fetch error:', error)
+            }
+        }
+
         fetchStats()
+        fetchFinanceStats()
     }, [])
 
     if (loading) {
@@ -56,7 +68,6 @@ export default function AdminDashboardPage() {
         )
     }
 
-    // ✅ ADD: No data fallback
     if (!stats) {
         return (
             <div className="flex flex-col justify-center items-center h-96 space-y-4">
@@ -73,6 +84,7 @@ export default function AdminDashboardPage() {
                 <p className="text-muted-foreground">Welcome back! Here&apos;s what&apos;s happening with your platform today.</p>
             </div>
 
+            {/* Existing Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -121,6 +133,59 @@ export default function AdminDashboardPage() {
                 </Card>
             </div>
 
+            {/* NEW: Financial Overview (This Month) */}
+            {financeStats && (
+                <div>
+                    <h2 className="text-xl font-semibold mb-4">Financial Overview (This Month)</h2>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Platform Commission</CardTitle>
+                                <TrendingUp className="h-4 w-4 text-primary" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-primary">₹{(financeStats.platformCommission || 0).toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground">Net platform earnings</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Pending Payouts</CardTitle>
+                                <Wallet className="h-4 w-4 text-amber-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-amber-600">₹{(financeStats.pendingPayouts || 0).toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground">To be paid to providers</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Total Refunds</CardTitle>
+                                <TrendingDown className="h-4 w-4 text-destructive" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-destructive">₹{(financeStats.totalRefunds || 0).toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground">{financeStats.refundCount || 0} refund requests</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Provider Earnings</CardTitle>
+                                <IndianRupee className="h-4 w-4 text-green-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-green-600">₹{(financeStats.providerEarnings || 0).toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground">Gross: ₹{(financeStats.grossEarnings || 0).toLocaleString()}</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            )}
+
+            {/* Recent Bookings */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>

@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { 
-    IndianRupee, Wallet, ArrowRight, Banknote, 
+import {
+    IndianRupee, Wallet, ArrowRight, Banknote,
     CreditCard, Clock, CheckCircle2, AlertCircle, Zap, RefreshCw
 } from "lucide-react"
 import { toast } from "sonner"
@@ -45,6 +45,9 @@ export default function ProviderEarningsPage() {
 
     useEffect(() => { fetchWallet() }, [])
 
+    // ✅ FIX: Safely extract balance whether API returns 'walletBalance' or 'balance'
+    const availableBalance = walletData?.walletBalance ?? walletData?.balance ?? 0
+
     const handlePayoutRequest = async () => {
         const amount = parseFloat(payoutAmount)
         if (!amount || amount <= 0) {
@@ -52,31 +55,20 @@ export default function ProviderEarningsPage() {
             return
         }
 
-        if (amount > (walletData?.walletBalance || 0)) {
+        if (amount > availableBalance) {
             toast.error('Amount exceeds wallet balance')
-            return
-        }
-
-        if (payoutMethod === 'BANK_TRANSFER' && !bankDetails.trim()) {
-            toast.error('Please enter bank account details')
-            return
-        }
-
-        if (payoutMethod === 'UPI' && !upiId.trim()) {
-            toast.error('Please enter UPI ID')
             return
         }
 
         setRequesting(true)
         try {
+            // ✅ Simplified: Sirf amount aur method bhejo
             const res = await apiFetch('/api/provider/payouts', {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     amount,
-                    method: payoutMethod,
-                    bankDetails: payoutMethod === 'BANK_TRANSFER' ? bankDetails : null,
-                    upiId: payoutMethod === 'UPI' ? upiId : null,
-                    notes: payoutNotes || null
+                    method: payoutMethod
                 })
             })
             const data = await res.json()
@@ -108,7 +100,7 @@ export default function ProviderEarningsPage() {
     const transactions = walletData?.transactions || []
 
     const getTxnIcon = (type: string) => {
-        switch(type) {
+        switch (type) {
             case 'EARNING_CREDIT': return <Zap className="h-5 w-5 text-green-600" />
             case 'PAYOUT_HOLD': return <Clock className="h-5 w-5 text-amber-600" />
             case 'PAYOUT_COMPLETED': return <CheckCircle2 className="h-5 w-5 text-blue-600" />
@@ -118,7 +110,7 @@ export default function ProviderEarningsPage() {
     }
 
     const getTxnColor = (type: string) => {
-        switch(type) {
+        switch (type) {
             case 'EARNING_CREDIT': case 'PAYOUT_REFUND': return 'text-green-600'
             case 'PAYOUT_HOLD': return 'text-amber-600'
             case 'PAYOUT_COMPLETED': return 'text-red-600'
@@ -137,7 +129,8 @@ export default function ProviderEarningsPage() {
                     <Button variant="outline" size="icon" onClick={fetchWallet} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
-                    <Button onClick={() => setPayoutModal(true)} disabled={!walletData?.walletBalance}>
+                    {/* ✅ FIX: Button ab availableBalance ke hisaab se enable/disable hoga */}
+                    <Button onClick={() => setPayoutModal(true)} disabled={availableBalance <= 0}>
                         <Wallet className="mr-2 h-4 w-4" />
                         Request Payout
                     </Button>
@@ -154,7 +147,8 @@ export default function ProviderEarningsPage() {
                         <Wallet className="h-5 w-5 opacity-80" />
                         <p className="text-sm font-medium opacity-90">Available Wallet Balance</p>
                     </div>
-                    <p className="text-4xl font-bold">₹{(walletData?.walletBalance || 0).toLocaleString()}</p>
+                    {/* ✅ FIX: Updated variable */}
+                    <p className="text-4xl font-bold">₹{availableBalance.toLocaleString()}</p>
                     <p className="text-xs opacity-80 mt-2">You can request a payout anytime.</p>
                 </CardContent>
             </Card>
@@ -181,7 +175,7 @@ export default function ProviderEarningsPage() {
                                         <div>
                                             <p className="font-medium">{txn.description}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {new Date(txn.createdAt).toLocaleString('en-IN')} 
+                                                {new Date(txn.createdAt).toLocaleString('en-IN')}
                                                 {txn.booking && ` • Booking #${txn.booking.bookingNumber}`}
                                             </p>
                                         </div>
@@ -199,13 +193,13 @@ export default function ProviderEarningsPage() {
                 </CardContent>
             </Card>
 
-            {/* Payout Request Modal */}
-            <Dialog open={payoutModal} onOpenChange={(open) => { setPayoutModal(open); if(!open) resetPayoutForm() }}>
+            {/* Payout Request Modal - Simplified */}
+            <Dialog open={payoutModal} onOpenChange={(open) => { setPayoutModal(open); if (!open) resetPayoutForm() }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Request Payout</DialogTitle>
                         <DialogDescription>
-                            Withdraw your earnings. Available: ₹{(walletData?.walletBalance || 0).toLocaleString()}
+                            Withdraw your earnings. Available: ₹{availableBalance.toLocaleString()}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -216,7 +210,7 @@ export default function ProviderEarningsPage() {
                                 value={payoutAmount}
                                 onChange={(e) => setPayoutAmount(e.target.value)}
                                 placeholder="Enter amount"
-                                max={walletData?.walletBalance || 0}
+                                max={availableBalance}
                             />
                         </div>
                         <div className="space-y-2">
@@ -237,23 +231,11 @@ export default function ProviderEarningsPage() {
                             </Select>
                         </div>
 
-                        {payoutMethod === 'BANK_TRANSFER' && (
-                            <div className="space-y-2">
-                                <Label>Bank Account Details *</Label>
-                                <Input value={bankDetails} onChange={(e) => setBankDetails(e.target.value)} placeholder="Account No, IFSC, Bank Name" />
-                            </div>
-                        )}
-
-                        {payoutMethod === 'UPI' && (
-                            <div className="space-y-2">
-                                <Label>UPI ID *</Label>
-                                <Input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="name@upi" />
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label>Notes (Optional)</Label>
-                            <Input value={payoutNotes} onChange={(e) => setPayoutNotes(e.target.value)} placeholder="Any specific instructions..." />
+                        {/* ✅ Info message instead of input fields */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                                💡 Payout will be sent to your saved {payoutMethod === 'BANK_TRANSFER' ? 'bank account' : 'UPI ID'} from profile.
+                            </p>
                         </div>
                     </div>
                     <div className="flex gap-3">

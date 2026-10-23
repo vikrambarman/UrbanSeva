@@ -13,11 +13,22 @@ export async function GET(request: NextRequest) {
         const where: any = {}
         if (status && status !== 'ALL') where.status = status
 
+        // ✅ FIX: Provider details include karo (bank details, UPI ID, etc.)
         const payouts = await db.payout.findMany({
             where,
             orderBy: { createdAt: 'desc' },
             include: {
-                provider: { include: { user: { select: { name: true, phone: true } } } }
+                provider: { 
+                    include: { 
+                        user: { 
+                            select: { 
+                                name: true, 
+                                phone: true,
+                                email: true 
+                            } 
+                        } 
+                    } 
+                }
             }
         })
 
@@ -34,26 +45,61 @@ export async function POST(request: NextRequest) {
         if (!admin) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
         const body = await request.json()
-        const { payoutId } = body
+        const { payoutId, notes } = body
 
         if (!payoutId) return NextResponse.json({ success: false, error: 'Payout ID required' }, { status: 400 })
+
+        // ✅ FIX: Payout fetch karo with provider details
+        const payout = await db.payout.findUnique({
+            where: { id: payoutId },
+            include: {
+                provider: {
+                    include: {
+                        user: { select: { name: true } }
+                    }
+                }
+            }
+        })
+
+        if (!payout) {
+            return NextResponse.json({ success: false, error: 'Payout not found' }, { status: 404 })
+        }
+
+        if (payout.status !== 'PENDING') {
+            return NextResponse.json({ success: false, error: 'Payout already processed' }, { status: 400 })
+        }
 
         const updatedPayout = await db.payout.update({
             where: { id: payoutId },
             data: { 
                 status: 'COMPLETED', 
-                processedAt: new Date() 
+                processedAt: new Date(),
+                notes: notes || payout.notes,
+                reference: `PAID-${Date.now()}`
             }
         })
 
-        // Also update the related ProviderEarnings to PAID
+        // Update related ProviderEarnings to PAID
         await db.providerEarning.updateMany({
-            where: { providerId: updatedPayout.providerId, status: 'PAYOUT_INITIATED' },
+            where: { providerId: payout.providerId, status: 'PAYOUT_INITIATED' },
             data: { status: 'PAID' }
+        })
+
+        // ✅ FIX: Create wallet transaction for payout completion
+        await db.providerWalletTransaction.create({
+            data: {
+                providerId: payout.providerId,
+                type: 'PAYOUT_COMPLETED',
+                amount: payout.amount,
+                description: `Payout #${payoutId} completed via ${payout.method}`,
+                referenceId: payoutId,
+                balanceAfter: 0 // Will be updated by next query
+            }
         })
 
         return NextResponse.json({ success: true, data: updatedPayout })
     } catch (error) {
+        console.error('Process Payout Error:', error)
         return NextResponse.json({ success: false, error: 'Failed to process payout' }, { status: 500 })
     }
 }

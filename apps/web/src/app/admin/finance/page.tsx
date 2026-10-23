@@ -6,10 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { IndianRupee, TrendingUp, TrendingDown, Wallet, Receipt, Download, AlertCircle } from "lucide-react"
+import { IndianRupee, TrendingUp, TrendingDown, Wallet, Receipt, Download, AlertCircle, RefreshCw, Banknote, CreditCard } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { apiFetch } from "@/lib/api-client"
+import { PayoutTable } from "@/components/admin/PayoutTable" // Ensure this path matches your component location
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 interface GSTSummary {
     totalRevenue: number
@@ -44,6 +48,69 @@ export default function AdminFinancePage() {
     const [gstPeriod, setGstPeriod] = useState('month')
     const [gstLoading, setGstLoading] = useState(false)
 
+    // NEW: Payouts State
+    const [payouts, setPayouts] = useState<any[]>([])
+    const [payoutsLoading, setPayoutsLoading] = useState(false)
+
+    // NEW: Earnings Summary State
+    const [earningsSummary, setEarningsSummary] = useState<any[]>([])
+    const [earningsLoading, setEarningsLoading] = useState(false)
+
+
+    // NEW: Manual Payout States
+    const [manualPayoutOpen, setManualPayoutOpen] = useState(false)
+    const [manualPayoutLoading, setManualPayoutLoading] = useState(false)
+    const [manualData, setManualData] = useState({
+        providerId: '',
+        amount: '',
+        method: 'BANK_TRANSFER',
+        bankDetails: '',
+        upiId: '',
+        notes: ''
+    })
+
+    const handleManualPayout = async () => {
+        if (!manualData.providerId || !manualData.amount || parseFloat(manualData.amount) <= 0) {
+            toast.error('Please enter valid Provider ID and Amount')
+            return
+        }
+        if (manualData.method === 'BANK_TRANSFER' && !manualData.bankDetails.trim()) {
+            toast.error('Bank details required')
+            return
+        }
+        if (manualData.method === 'UPI' && !manualData.upiId.trim()) {
+            toast.error('UPI ID required')
+            return
+        }
+
+        setManualPayoutLoading(true)
+        try {
+            const res = await apiFetch('/api/admin/finance/payouts/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...manualData,
+                    amount: parseFloat(manualData.amount)
+                })
+            })
+            const data = await res.json()
+            if (data.success) {
+                toast.success('Manual payout initiated successfully!')
+                setManualPayoutOpen(false)
+                setManualData({ providerId: '', amount: '', method: 'BANK_TRANSFER', bankDetails: '', upiId: '', notes: '' })
+                fetchStats()
+                fetchPayouts()
+                fetchEarningsSummary()
+            } else {
+                toast.error(data.error || 'Failed to process payout')
+            }
+        } catch (error) {
+            toast.error('Failed to process manual payout')
+        } finally {
+            setManualPayoutLoading(false)
+        }
+    }
+
     const fetchStats = async () => {
         setLoading(true)
         try {
@@ -51,7 +118,7 @@ export default function AdminFinancePage() {
             const data = await res.json()
             if (data.success) setStats(data.data)
             else toast.error(data.error)
-        } catch { toast.error("Failed to fetch stats") } 
+        } catch { toast.error("Failed to fetch stats") }
         finally { setLoading(false) }
     }
 
@@ -71,8 +138,62 @@ export default function AdminFinancePage() {
         }
     }
 
+    // NEW: Fetch Pending Payouts
+    const fetchPayouts = async () => {
+        setPayoutsLoading(true)
+        try {
+            const res = await apiFetch('/api/admin/finance/payouts?status=PENDING', { cache: 'no-store' })
+            const data = await res.json()
+            if (data.success) setPayouts(data.data)
+        } catch (error) {
+            console.error('Payouts fetch error:', error)
+        } finally {
+            setPayoutsLoading(false)
+        }
+    }
+
+    // NEW: Fetch Provider Earnings Summary
+    const fetchEarningsSummary = async () => {
+        setEarningsLoading(true)
+        try {
+            const res = await apiFetch('/api/admin/finance/earnings/summary', { cache: 'no-store' })
+            const data = await res.json()
+            if (data.success) setEarningsSummary(data.data)
+            } catch (error) {
+        console.error('Earnings summary fetch error:', error)
+    } finally {
+        setEarningsLoading(false)
+        console.log(earningsSummary)
+        }
+    }
+
+    // NEW: Process Payout (Mark as Paid)
+    const handleProcessPayout = async (payoutId: string) => {
+        try {
+            const res = await apiFetch('/api/admin/finance/payouts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payoutId })
+            })
+            const data = await res.json()
+            if (data.success) {
+                toast.success('Payout marked as completed!')
+                fetchPayouts()
+                fetchStats() // Refresh stats to update pending payouts amount
+            } else {
+                toast.error(data.error || 'Failed to process payout')
+            }
+        } catch (error) {
+            toast.error('Failed to process payout')
+        }
+    }
+
     useEffect(() => { fetchStats() }, [period])
     useEffect(() => { fetchGSTReport() }, [gstPeriod])
+    useEffect(() => {
+        fetchPayouts()
+        fetchEarningsSummary()
+    }, [])
 
     const exportGSTCSV = () => {
         if (!gstSummary || categoryGST.length === 0) {
@@ -123,17 +244,23 @@ export default function AdminFinancePage() {
                     <h1 className="text-3xl font-bold tracking-tight">Financial Dashboard</h1>
                     <p className="text-muted-foreground">Overview of platform revenue, commissions, GST, and payouts.</p>
                 </div>
-                <Select value={period} onValueChange={setPeriod}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select Period" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="today">Today</SelectItem>
-                        <SelectItem value="week">Last 7 Days</SelectItem>
-                        <SelectItem value="month">Last 30 Days</SelectItem>
-                        <SelectItem value="all">All Time</SelectItem>
-                    </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                    {/* ✅ NEW: Manual Payout Button */}
+                    <Button onClick={() => setManualPayoutOpen(true)} variant="outline">
+                        <Banknote className="h-4 w-4 mr-2" /> Manual Payout
+                    </Button>
+                    <Select value={period} onValueChange={setPeriod}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select Period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="today">Today</SelectItem>
+                            <SelectItem value="week">Last 7 Days</SelectItem>
+                            <SelectItem value="month">Last 30 Days</SelectItem>
+                            <SelectItem value="all">All Time</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {/* Stats Grid */}
@@ -183,9 +310,124 @@ export default function AdminFinancePage() {
                 </Card>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* GST SECTION - NEW */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* NEW: Pending Payouts Section */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Pending Payouts</CardTitle>
+                            <p className="text-sm text-muted-foreground">Manual payout processing for providers.</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={fetchPayouts} disabled={payoutsLoading}>
+                            <RefreshCw className={`h-4 w-4 mr-2 ${payoutsLoading ? 'animate-spin' : ''}`} /> Refresh
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {payoutsLoading ? (
+                        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+                    ) : (
+                        <PayoutTable payouts={payouts} onProcess={handleProcessPayout} />
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Provider Earnings Summary */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Provider Earnings Summary</CardTitle>
+                            <p className="text-sm text-muted-foreground">Complete earnings breakdown per provider (All Time)</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={fetchEarningsSummary} disabled={earningsLoading}>
+                            <RefreshCw className={`h-4 w-4 mr-2 ${earningsLoading ? 'animate-spin' : ''}`} /> Refresh
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {earningsLoading ? (
+                        <Skeleton className="h-32" />
+                    ) : earningsSummary.length > 0 ? (
+                        <div className="rounded-md border overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Provider</TableHead>
+                                        <TableHead className="text-right">Bookings</TableHead>
+                                        <TableHead className="text-right">Gross Earnings</TableHead>
+                                        <TableHead className="text-right">Commission</TableHead>
+                                        <TableHead className="text-right">Net Earnings</TableHead>
+                                        <TableHead className="text-right">Paid</TableHead>
+                                        <TableHead className="text-right">Pending</TableHead>
+                                        <TableHead className="text-right">Wallet Balance</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {earningsSummary.map((item: any) => (
+                                        <TableRow key={item.providerId}>
+                                            <TableCell>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{item.providerName}</span>
+                                                    {item.providerPhone && (
+                                                        <span className="text-xs text-muted-foreground">{item.providerPhone}</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <span className="font-medium">{item.totalJobs || 0}</span>
+                                                <p className="text-xs text-muted-foreground">{item.bookingCount || 0} earnings</p>
+                                            </TableCell>
+                                            <TableCell className="text-right">₹{item.gross.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right text-primary">₹{item.commission.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right font-semibold text-green-600">₹{item.net.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right text-blue-600">₹{item.paid.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">
+                                                <span className="font-semibold text-amber-600">₹{item.pending.toLocaleString()}</span>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <span className="font-semibold">₹{item.walletBalance.toLocaleString()}</span>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {/* ✅ NEW: Total Row */}
+                                    <TableRow className="bg-muted/50 font-bold">
+                                        <TableCell>TOTAL</TableCell>
+                                        <TableCell className="text-right">
+                                            {earningsSummary.reduce((sum, item) => sum + (item.totalJobs || 0), 0)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            ₹{earningsSummary.reduce((sum, item) => sum + item.gross, 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-right text-primary">
+                                            ₹{earningsSummary.reduce((sum, item) => sum + item.commission, 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-right text-green-600">
+                                            ₹{earningsSummary.reduce((sum, item) => sum + item.net, 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-right text-blue-600">
+                                            ₹{earningsSummary.reduce((sum, item) => sum + item.paid, 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-right text-amber-600">
+                                            ₹{earningsSummary.reduce((sum, item) => sum + item.pending, 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            ₹{earningsSummary.reduce((sum, item) => sum + item.walletBalance, 0).toLocaleString()}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8">
+                            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                            <p className="text-muted-foreground">No earnings data available.</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* GST SECTION */}
             <Card className="border-primary/20 bg-gradient-to-br from-orange-50 to-amber-50">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -334,6 +576,127 @@ export default function AdminFinancePage() {
                     </CardContent>
                 </Card>
             </div>
+
+
+            {/* Manual Payout Dialog - Improved */}
+            <Dialog open={manualPayoutOpen} onOpenChange={setManualPayoutOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Initiate Manual Payout</DialogTitle>
+                        <DialogDescription>
+                            Pay a provider directly. Select from providers with wallet balance.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        {/* ✅ NEW: Provider Selector with Wallet Balance */}
+                        <div className="space-y-2">
+                            <Label>Select Provider *</Label>
+                            <Select
+                                value={manualData.providerId}
+                                onValueChange={(val) => setManualData({ ...manualData, providerId: val })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Choose a provider" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {earningsSummary
+                                        .filter(p => p.walletBalance > 0)
+                                        .map((provider) => (
+                                            <SelectItem key={provider.providerId} value={provider.providerId}>
+                                                <div className="flex justify-between w-full">
+                                                    <span>{provider.providerName}</span>
+                                                    <span className="text-muted-foreground ml-4">
+                                                        Balance: ₹{provider.walletBalance.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </SelectItem>
+                                        ))
+                                    }
+                                </SelectContent>
+                            </Select>
+                            {earningsSummary.filter(p => p.walletBalance > 0).length === 0 && (
+                                <p className="text-xs text-muted-foreground">No providers with available balance</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Amount (₹) *</Label>
+                            <Input
+                                type="number"
+                                value={manualData.amount}
+                                onChange={(e) => setManualData({ ...manualData, amount: e.target.value })}
+                                placeholder="Enter amount"
+                                max={
+                                    earningsSummary.find(p => p.providerId === manualData.providerId)?.walletBalance || 0
+                                }
+                            />
+                            {manualData.providerId && (
+                                <p className="text-xs text-muted-foreground">
+                                    Available: ₹{
+                                        (earningsSummary.find(p => p.providerId === manualData.providerId)?.walletBalance || 0).toLocaleString()
+                                    }
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Payout Method *</Label>
+                            <Select value={manualData.method} onValueChange={(val) => setManualData({ ...manualData, method: val })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="BANK_TRANSFER">
+                                        <div className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> Bank Transfer</div>
+                                    </SelectItem>
+                                    <SelectItem value="UPI">
+                                        <div className="flex items-center gap-2"><Banknote className="h-4 w-4" /> UPI</div>
+                                    </SelectItem>
+                                    <SelectItem value="CASH">
+                                        <div className="flex items-center gap-2"><Banknote className="h-4 w-4" /> Cash (Offline)</div>
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {manualData.method === 'BANK_TRANSFER' && (
+                            <div className="space-y-2">
+                                <Label>Bank Account Details *</Label>
+                                <Input
+                                    value={manualData.bankDetails}
+                                    onChange={(e) => setManualData({ ...manualData, bankDetails: e.target.value })}
+                                    placeholder="Account No, IFSC, Bank Name"
+                                />
+                            </div>
+                        )}
+
+                        {manualData.method === 'UPI' && (
+                            <div className="space-y-2">
+                                <Label>UPI ID *</Label>
+                                <Input
+                                    value={manualData.upiId}
+                                    onChange={(e) => setManualData({ ...manualData, upiId: e.target.value })}
+                                    placeholder="name@upi"
+                                />
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label>Notes (Optional)</Label>
+                            <Input
+                                value={manualData.notes}
+                                onChange={(e) => setManualData({ ...manualData, notes: e.target.value })}
+                                placeholder="Transaction reference, UTR number, etc."
+                            />
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button variant="outline" onClick={() => setManualPayoutOpen(false)} className="flex-1">Cancel</Button>
+                        <Button onClick={handleManualPayout} disabled={manualPayoutLoading} className="flex-1">
+                            {manualPayoutLoading ? 'Processing...' : 'Initiate Payout'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
+
     )
 }
