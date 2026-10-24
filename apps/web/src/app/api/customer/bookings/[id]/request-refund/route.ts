@@ -13,8 +13,8 @@ import { db } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
 
 export async function POST(
-    request: NextRequest,
-    { params }: { params: { id: string } }
+    request: NextRequest, 
+    { params }: { params: Promise<{ id: string }> } // <--- Add Promise
 ) {
     try {
         // 1. Authentication
@@ -29,7 +29,7 @@ export async function POST(
             return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 })
         }
 
-        const { id } = params
+        const { id } = await params; // <--- Await params
         const body = await request.json()
         const { reason } = body
 

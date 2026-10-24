@@ -47,7 +47,7 @@ export async function PUT(
             data: {
                 commissionRate: body.commissionRate,
                 isAvailable: body.isAvailable,
-            }
+            } as any
         })
 
         return NextResponse.json({ success: true, data: updatedProvider })

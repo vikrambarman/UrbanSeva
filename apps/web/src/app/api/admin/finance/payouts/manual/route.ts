@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
                 notes: notes || 'Manual payout initiated by Admin',
                 status: 'PENDING',
                 transactionId: `MANUAL-${Date.now()}`
-            }
+            } as any
         })
 
         // 3. Deduct Wallet Balance

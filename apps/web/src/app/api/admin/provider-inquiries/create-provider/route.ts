@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
                     bio: inquiry.message,
                     commissionRate: commissionRate || 15,
                     isAvailable: true
-                }
+                } as any
             })
 
             if (process.env.NODE_ENV === 'development') {

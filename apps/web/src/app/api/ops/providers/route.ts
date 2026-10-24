@@ -1,7 +1,7 @@
-// apps/web/src/app/api/ops/providers/search/route.ts
-// KYA: Ops portal ke liye provider search API — category-wise ya name/phone se
-// KYUN: CALLING_TEAM admin routes access nahi kar sakta, isliye alag endpoint chahiye
-//       Jo sirf approved providers dikhaye aur category filter support kare
+// apps/web/src/app/api/ops/providers/route.ts
+// CHANGE: Provider Helpdesk ke liye main list route
+// WHY: Ops team ko saare providers dikhne chahiye (PENDING, APPROVED, REJECTED, etc.)
+//       with pagination, search, aur status filter support
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -18,101 +18,118 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url)
-        const query = searchParams.get('query') || ''
-        const category = searchParams.get('category') || ''
+        const page = parseInt(searchParams.get('page') || '1')
+        const limit = parseInt(searchParams.get('limit') || '20')
+        const search = searchParams.get('search') || ''
+        const status = searchParams.get('status') || 'ALL'
 
-        // ═══════════════════════════════════════════════════════════════
-        // Build where clause
-        // ═══════════════════════════════════════════════════════════════
+        const skip = (page - 1) * limit
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = {
-            status: 'APPROVED',
+        const where: any = {}
+
+        // Status filter (ALL = no filter, otherwise exact match)
+        if (status && status !== 'ALL') {
+            where.status = status
         }
 
-        // Search by name or phone
-        if (query) {
+        // Search by provider name, phone, or email
+        if (search) {
             where.OR = [
-                { user: { name: { contains: query, mode: 'insensitive' } } },
-                { user: { phone: { contains: query, mode: 'insensitive' } } },
+                { user: { name: { contains: search, mode: 'insensitive' } } },
+                { user: { phone: { contains: search, mode: 'insensitive' } } },
+                { user: { email: { contains: search, mode: 'insensitive' } } },
             ]
         }
 
-        // Filter by category
-        if (category) {
-            where.services = {
-                some: {
-                    service: {
-                        subCategory: {
-                            category: {
-                                name: { equals: category, mode: 'insensitive' }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // Fetch providers
-        // ═══════════════════════════════════════════════════════════════
-        const providers = await db.provider.findMany({
-            where,
-            select: {
-                id: true,
-                experience: true,
-                avgRating: true,
-                user: {
-                    select: {
-                        name: true,
-                        phone: true,
-                    }
-                },
-                // Count completed jobs
-                _count: {
-                    select: {
-                        bookings: {
-                            where: {
-                                status: 'SERVICE_COMPLETED'
-                            }
-                        }
-                    }
-                },
-                // Check if currently busy (has active booking today)
-                bookings: {
-                    where: {
-                        status: {
-                            in: ['PROVIDER_ASSIGNED', 'PROVIDER_TRAVELLING', 'SERVICE_STARTED']
-                        },
-                        scheduledDate: {
-                            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-                            lte: new Date(new Date().setHours(23, 59, 59, 999)),
+        const [providers, total] = await Promise.all([
+            db.provider.findMany({
+                where,
+                select: {
+                    id: true,
+                    status: true,
+                    bio: true,
+                    experience: true,
+                    avgRating: true,
+                    totalJobs: true,
+                    totalEarnings: true,
+                    isAvailable: true,
+                    createdAt: true,
+                    user: {
+                        select: {
+                            name: true,
+                            phone: true,
+                            email: true,
+                            avatar: true,
                         }
                     },
-                    take: 1,
-                }
-            },
-            orderBy: [
-                { avgRating: 'desc' },
-                { experience: 'desc' },
-            ],
-            take: 50,
-        })
+                    services: {
+                        where: { isActive: true },
+                        select: {
+                            service: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    subCategory: {
+                                        select: {
+                                            category: {
+                                                select: {
+                                                    name: true,
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    _count: {
+                        select: {
+                            bookings: {
+                                where: {
+                                    status: 'SERVICE_COMPLETED'
+                                }
+                            }
+                        }
+                    },
+                },
+                orderBy: [
+                    { createdAt: 'desc' },
+                ],
+                skip,
+                take: limit,
+            }),
+            db.provider.count({ where })
+        ])
 
-        // ═══════════════════════════════════════════════════════════════
-        // Format response
-        // ═══════════════════════════════════════════════════════════════
+        // Format providers for frontend
         const formattedProviders = providers.map(p => ({
             id: p.id,
-            user: p.user,
+            status: p.status,
+            bio: p.bio,
             experience: p.experience,
             avgRating: p.avgRating,
+            totalJobs: p.totalJobs,
+            totalEarnings: p.totalEarnings,
+            isAvailable: p.isAvailable,
+            createdAt: p.createdAt,
+            user: p.user,
             completedJobs: p._count.bookings,
-            isAvailable: p.bookings.length === 0, // No active booking today = available
+            services: p.services.map(s => ({
+                id: s.service.id,
+                name: s.service.name,
+                category: s.service.subCategory.category.name,
+            })),
         }))
 
         return NextResponse.json({
             success: true,
-            data: formattedProviders,
+            data: {
+                providers: formattedProviders,
+                total,
+                page,
+                limit,
+            }
         }, {
             headers: {
                 'Cache-Control': 'no-store, must-revalidate',
@@ -120,7 +137,7 @@ export async function GET(request: NextRequest) {
         })
 
     } catch (error) {
-        console.error('❌ Ops provider search error:', error)
+        console.error('❌ Ops providers list error:', error)
         return NextResponse.json(
             { success: false, error: 'Internal server error' },
             { status: 500 }

@@ -4,7 +4,7 @@
 
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ProviderTable } from "@/components/admin/ProviderTable"
+import { ProviderTable } from "./ProviderTable"
 
 interface ProvidersListProps {
     initialData: {

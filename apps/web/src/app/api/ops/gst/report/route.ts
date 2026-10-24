@@ -10,12 +10,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAdminUser } from '@/lib/auth'
+import { getCallingTeamUser } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
     try {
-        const admin = await getAdminUser(request)
-        if (!admin) {
+        const user = await getCallingTeamUser(request)
+        if (!user) {
             return NextResponse.json(
                 { success: false, error: 'Unauthorized' },
                 { status: 401 }
