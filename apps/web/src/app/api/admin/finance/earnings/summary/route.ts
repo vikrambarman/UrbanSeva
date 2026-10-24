@@ -7,52 +7,24 @@ export async function GET(request: NextRequest) {
         const admin = await getAdminUser(request)
         if (!admin) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
-        // 1. Total earnings per provider (Gross, Commission, Net)
-        const earningsByProvider = await db.providerEarning.groupBy({
+        // 1. Sirf un providers ki IDs niklo jinke paas earnings hain
+        const earningsGroup = await db.providerEarning.groupBy({
             by: ['providerId'],
-            _sum: {
-                gross: true,
-                commission: true,
-                net: true
+            _sum: { 
+                gross: true, 
+                commission: true, 
+                net: true 
             },
-            _count: {
-                id: true
-            }
+            _count: { id: true }
         })
 
-        if (earningsByProvider.length === 0) {
+        if (earningsGroup.length === 0) {
             return NextResponse.json({ success: true, data: [] })
         }
 
-        // 2. ✅ FIX: Pending earnings (PENDING + PAYOUT_INITIATED status)
-        const pendingByProvider = await db.providerEarning.groupBy({
-            by: ['providerId'],
-            where: { 
-                status: { 
-                    in: ['PENDING', 'PAYOUT_INITIATED'] // ✅ Dono status ko include karo
-                } 
-            },
-            _sum: { net: true }
-        })
+        const providerIds = earningsGroup.map(e => e.providerId)
 
-        const pendingMap = new Map(
-            pendingByProvider.map(p => [p.providerId, p._sum.net || 0])
-        )
-
-        // 3. ✅ NEW: Total paid earnings per provider
-        const paidByProvider = await db.providerEarning.groupBy({
-            by: ['providerId'],
-            where: { status: 'PAID' },
-            _sum: { net: true }
-        })
-
-        const paidMap = new Map(
-            paidByProvider.map(p => [p.providerId, p._sum.net || 0])
-        )
-
-        // 4. Fetch provider details with wallet balance
-        const providerIds = earningsByProvider.map(e => e.providerId)
-        
+        // 2. Provider details fetch karo
         const providers = await db.provider.findMany({
             where: { id: { in: providerIds } },
             select: {
@@ -60,29 +32,45 @@ export async function GET(request: NextRequest) {
                 walletBalance: true,
                 totalJobs: true,
                 user: { 
-                    select: { 
-                        name: true,
-                        phone: true 
-                    } 
+                    select: { name: true, phone: true } 
                 }
             }
         })
 
         const providerMap = new Map(
-            providers.map(p => [
-                p.id, 
-                {
-                    name: p.user?.name || 'Unnamed Provider',
-                    phone: p.user?.phone || '',
-                    walletBalance: p.walletBalance || 0,
-                    totalJobs: p.totalJobs || 0
-                }
-            ])
+            providers.map(p => [p.id, {
+                name: p.user?.name || 'Unnamed Provider',
+                phone: p.user?.phone || '',
+                walletBalance: p.walletBalance || 0,
+                totalJobs: p.totalJobs || 0
+            }])
         )
 
-        // 5. Combine and format data
-        const summary = earningsByProvider.map(e => {
-            const providerInfo = providerMap.get(e.providerId) || {
+        // 3. Paid Payouts calculate karo (Direct Payout table se)
+        const paidPayouts = await db.payout.groupBy({
+            by: ['providerId'],
+            where: { 
+                providerId: { in: providerIds }, 
+                status: 'COMPLETED' 
+            },
+            _sum: { amount: true }
+        })
+        const paidMap = new Map(paidPayouts.map(p => [p.providerId, p._sum.amount || 0]))
+
+        // 4. ✅ FIX: Pending Payouts calculate karo (PAYOUT_INITIATED hata diya kyunki wo EarningStatus hai)
+        const pendingPayouts = await db.payout.groupBy({
+            by: ['providerId'],
+            where: { 
+                providerId: { in: providerIds }, 
+                status: { in: ['PENDING', 'PROCESSING'] } 
+            },
+            _sum: { amount: true }
+        })
+        const pendingMap = new Map(pendingPayouts.map(p => [p.providerId, p._sum.amount || 0]))
+
+        // 5. Final Data Combine karo
+        const summary = earningsGroup.map(e => {
+            const provider = providerMap.get(e.providerId) || {
                 name: 'Unnamed Provider',
                 phone: '',
                 walletBalance: 0,
@@ -91,20 +79,20 @@ export async function GET(request: NextRequest) {
 
             return {
                 providerId: e.providerId,
-                providerName: providerInfo.name,
-                providerPhone: providerInfo.phone,
+                providerName: provider.name,
+                providerPhone: provider.phone,
                 gross: e._sum.gross || 0,
                 commission: e._sum.commission || 0,
                 net: e._sum.net || 0,
-                pending: pendingMap.get(e.providerId) || 0,
                 paid: paidMap.get(e.providerId) || 0,
-                walletBalance: providerInfo.walletBalance,
-                totalJobs: providerInfo.totalJobs,
+                pending: pendingMap.get(e.providerId) || 0,
+                walletBalance: provider.walletBalance,
+                totalJobs: provider.totalJobs,
                 bookingCount: e._count.id
             }
         })
 
-        // Sort by net earnings descending
+        // Net earnings ke hisaab se sort karo
         summary.sort((a, b) => b.net - a.net)
 
         return NextResponse.json({ success: true, data: summary })

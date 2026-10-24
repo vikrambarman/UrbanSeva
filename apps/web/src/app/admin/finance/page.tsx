@@ -152,18 +152,23 @@ export default function AdminFinancePage() {
         }
     }
 
-    // NEW: Fetch Provider Earnings Summary
     const fetchEarningsSummary = async () => {
         setEarningsLoading(true)
         try {
             const res = await apiFetch('/api/admin/finance/earnings/summary', { cache: 'no-store' })
             const data = await res.json()
-            if (data.success) setEarningsSummary(data.data)
-            } catch (error) {
-        console.error('Earnings summary fetch error:', error)
-    } finally {
-        setEarningsLoading(false)
-        console.log(earningsSummary)
+
+            // ✅ DEBUG: Console mein dekho
+            console.log('📊 Earnings Summary Data:', data)
+
+            if (data.success) {
+                setEarningsSummary(data.data)
+                console.log('✅ First item:', data.data[0]) // Check first item
+            }
+        } catch (error) {
+            console.error('❌ Earnings summary fetch error:', error)
+        } finally {
+            setEarningsLoading(false)
         }
     }
 
@@ -355,12 +360,12 @@ export default function AdminFinancePage() {
                                     <TableRow>
                                         <TableHead>Provider</TableHead>
                                         <TableHead className="text-right">Bookings</TableHead>
-                                        <TableHead className="text-right">Gross Earnings</TableHead>
+                                        <TableHead className="text-right">Gross</TableHead>
                                         <TableHead className="text-right">Commission</TableHead>
-                                        <TableHead className="text-right">Net Earnings</TableHead>
+                                        <TableHead className="text-right">Net</TableHead>
                                         <TableHead className="text-right">Paid</TableHead>
                                         <TableHead className="text-right">Pending</TableHead>
-                                        <TableHead className="text-right">Wallet Balance</TableHead>
+                                        <TableHead className="text-right">Wallet</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -376,43 +381,50 @@ export default function AdminFinancePage() {
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <span className="font-medium">{item.totalJobs || 0}</span>
-                                                <p className="text-xs text-muted-foreground">{item.bookingCount || 0} earnings</p>
-                                            </TableCell>
-                                            <TableCell className="text-right">₹{item.gross.toLocaleString()}</TableCell>
-                                            <TableCell className="text-right text-primary">₹{item.commission.toLocaleString()}</TableCell>
-                                            <TableCell className="text-right font-semibold text-green-600">₹{item.net.toLocaleString()}</TableCell>
-                                            <TableCell className="text-right text-blue-600">₹{item.paid.toLocaleString()}</TableCell>
-                                            <TableCell className="text-right">
-                                                <span className="font-semibold text-amber-600">₹{item.pending.toLocaleString()}</span>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <span className="font-semibold">₹{item.walletBalance.toLocaleString()}</span>
+                                                ₹{Number(item.gross || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="text-right text-primary">
+                                                ₹{Number(item.commission || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold text-green-600">
+                                                ₹{Number(item.net || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="text-right text-blue-600 font-medium">
+                                                ₹{Number(item.paid || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="text-right text-amber-600 font-medium">
+                                                ₹{Number(item.pending || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold">
+                                                ₹{Number(item.walletBalance || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                             </TableCell>
                                         </TableRow>
                                     ))}
-                                    {/* ✅ NEW: Total Row */}
+                                    {/* Total Row */}
                                     <TableRow className="bg-muted/50 font-bold">
                                         <TableCell>TOTAL</TableCell>
                                         <TableCell className="text-right">
-                                            {earningsSummary.reduce((sum, item) => sum + (item.totalJobs || 0), 0)}
+                                            {earningsSummary.reduce((sum: number, item: any) => sum + (item.totalJobs || 0), 0)}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            ₹{earningsSummary.reduce((sum, item) => sum + item.gross, 0).toLocaleString()}
+                                            ₹{Number(earningsSummary.reduce((sum: number, item: any) => sum + Number(item.gross || 0), 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell className="text-right text-primary">
-                                            ₹{earningsSummary.reduce((sum, item) => sum + item.commission, 0).toLocaleString()}
+                                            ₹{Number(earningsSummary.reduce((sum: number, item: any) => sum + Number(item.commission || 0), 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell className="text-right text-green-600">
-                                            ₹{earningsSummary.reduce((sum, item) => sum + item.net, 0).toLocaleString()}
+                                            ₹{Number(earningsSummary.reduce((sum: number, item: any) => sum + Number(item.net || 0), 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell className="text-right text-blue-600">
-                                            ₹{earningsSummary.reduce((sum, item) => sum + item.paid, 0).toLocaleString()}
+                                            ₹{Number(earningsSummary.reduce((sum: number, item: any) => sum + Number(item.paid || 0), 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell className="text-right text-amber-600">
-                                            ₹{earningsSummary.reduce((sum, item) => sum + item.pending, 0).toLocaleString()}
+                                            ₹{Number(earningsSummary.reduce((sum: number, item: any) => sum + Number(item.pending || 0), 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            ₹{earningsSummary.reduce((sum, item) => sum + item.walletBalance, 0).toLocaleString()}
+                                            ₹{Number(earningsSummary.reduce((sum: number, item: any) => sum + Number(item.walletBalance || 0), 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                         </TableCell>
                                     </TableRow>
                                 </TableBody>
